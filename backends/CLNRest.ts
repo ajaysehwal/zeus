@@ -432,6 +432,52 @@ export default class CLNRest {
         });
     };
 
+    // Watchtower methods
+    addWatchTower = (data: any) =>
+        this.postRequest('/v2/watchtower/client', {
+            pubkey: data.pubkey,
+            address: data.address
+        });
+    listWatchTowers = () =>
+        this.request('/v2/watchtower/client', 'get', null, null, 10000);
+
+    getWatchTowerInfo = (pubkey: string) =>
+        this.request(
+            `/v2/watchtower/client/info/${pubkey}`,
+            'get',
+            null,
+            null,
+            10000
+        );
+
+    deactivateWatchTower = (pubkey: string) =>
+        this.postRequest(
+            `/v2/watchtower/client/deactivate/${pubkey}`,
+            null,
+            10000
+        );
+
+    removeWatchTower = (pubkey: string) =>
+        this.request(
+            `/v2/watchtower/client/${pubkey}`,
+            'delete',
+            null,
+            null,
+            10000
+        );
+
+    getWatchTowerStats = () =>
+        this.request('/v2/watchtower/client/stats', 'get', null, null, 10000);
+
+    getWatchTowerPolicy = () =>
+        this.request('/v2/watchtower/client/policy', 'get', null, null, 10000);
+    terminateWatchTowerSession = (data: any) =>
+        this.postRequest(
+            `/v2/watchtower/client/sessions/terminate/${data.session_id}`,
+            data
+        );
+    supportsWatchTower = () => true;
+
     supportsMessageSigning = () => true;
     supportsLnurlAuth = () => true;
     supportsOnchainSends = () => true;

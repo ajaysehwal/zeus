@@ -240,6 +240,10 @@ import CashuTools from './views/Tools/CashuTools';
 
 import { isLightTheme, themeColor } from './utils/ThemeUtils';
 
+import WatchTowerSettings from './views/Settings/WatchTowerSettings';
+import ActiveWatchtowers from './views/Settings/ActiveWatchtowers';
+import AddWatchtower from './views/Settings/AddWatchtower';
+
 export default class App extends React.PureComponent {
     private backPressListenerSubscription: NativeEventSubscription;
 
@@ -1119,6 +1123,24 @@ export default class App extends React.PureComponent {
                                                         name="NWCAddressSettings" // @ts-ignore:next-line
                                                         component={
                                                             NWCAddressSettings
+                                                        }
+                                                    />
+                                                    <Stack.Screen
+                                                        name="WatchTowerSettings" // @ts-ignore:next-line
+                                                        component={
+                                                            WatchTowerSettings
+                                                        }
+                                                    />
+                                                    <Stack.Screen
+                                                        name="ActiveWatchtowers" // @ts-ignore:next-line
+                                                        component={
+                                                            ActiveWatchtowers
+                                                        }
+                                                    />
+                                                    <Stack.Screen
+                                                        name="AddWatchtower" // @ts-ignore:next-line
+                                                        component={
+                                                            AddWatchtower
                                                         }
                                                     />
                                                 </Stack.Navigator>

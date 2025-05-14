@@ -231,6 +231,27 @@ export default class EmbeddedLND extends LND {
             Base64Utils.stringToUint8Array(msg)
         );
     };
+    // Watchtower Client methods
+    addWatchTower = async (data: any) =>
+        await lndMobile.watchTowerClient.addTower(data.pubkey, data.address);
+
+    listWatchTowers = async () => await lndMobile.watchTowerClient.listTowers();
+
+    getWatchTowerInfo = async (pubkey: string) =>
+        await lndMobile.watchTowerClient.getTowerInfo(pubkey);
+
+    deactivateWatchTower = async (pubkey: string) =>
+        await lndMobile.watchTowerClient.deactivateTower(pubkey);
+
+    removeWatchTower = async (pubkey: string) =>
+        await lndMobile.watchTowerClient.removeTower(pubkey);
+
+    getWatchTowerStats = async () => await lndMobile.watchTowerClient.stats();
+
+    getWatchTowerPolicy = async () => await lndMobile.watchTowerClient.policy();
+
+    terminateWatchTowerSession = async (data: any) =>
+        await lndMobile.watchTowerClient.terminateSession(data.session_id);
 
     // getFees = () => N/A;
     // setFees = () => N/A;
@@ -328,4 +349,5 @@ export default class EmbeddedLND extends LND {
     isLNDBased = () => true;
     supportInboundFees = () => this.supports('v0.18.0');
     supportsCashuWallet = () => true;
+    supportsWatchTower = () => true;
 }

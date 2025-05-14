@@ -22,7 +22,7 @@ import ReceiveIcon from '../../assets/images/SVG/Receive.svg';
 import SendIcon from '../../assets/images/SVG/Send.svg';
 import CloudIcon from '../../assets/images/SVG/Cloud.svg';
 import NostrichIcon from '../../assets/images/SVG/Nostrich.svg';
-
+import WatchTowerIcon from '../../assets/images/SVG/watchtower.svg';
 import Header from '../../components/Header';
 import Screen from '../../components/Screen';
 
@@ -126,6 +126,44 @@ export default class Settings extends React.Component<SettingsProps, {}> {
                                     }}
                                 >
                                     {localeString('general.lsp')}
+                                </Text>
+                                <View style={styles.ForwardArrow}>
+                                    <ForwardIcon stroke={forwardArrowColor} />
+                                </View>
+                            </TouchableOpacity>
+                        </View>
+                    )}
+
+                    {BackendUtils.supportsWatchTower() && selectedNode && (
+                        <View
+                            style={{
+                                backgroundColor: themeColor('secondary'),
+                                width: '90%',
+                                borderRadius: 10,
+                                alignSelf: 'center',
+                                marginVertical: 5
+                            }}
+                        >
+                            <TouchableOpacity
+                                style={styles.columnField}
+                                onPress={() => {
+                                    navigation.navigate('WatchTowerSettings');
+                                }}
+                            >
+                                <View style={styles.icon}>
+                                    <WatchTowerIcon
+                                        fill={themeColor('text')}
+                                        width={25}
+                                        height={25}
+                                    />
+                                </View>
+                                <Text
+                                    style={{
+                                        ...styles.columnText,
+                                        color: themeColor('text')
+                                    }}
+                                >
+                                    {localeString('general.watchtower')}
                                 </Text>
                                 <View style={styles.ForwardArrow}>
                                     <ForwardIcon stroke={forwardArrowColor} />

@@ -706,7 +706,32 @@ export default class LND {
             console.log('channel acceptor close');
         });
     };
+    // Watchtower methods
+    addWatchTower = (data: any) =>
+        this.postRequest('/v2/watchtower/client', {
+            pubkey: data.pubkey,
+            address: data.address
+        });
+    listWatchTowers = () => this.getRequest('/v2/watchtower/client');
 
+    getWatchTowerInfo = (pubkey: string) =>
+        this.getRequest(`/v2/watchtower/client/info/${pubkey}`);
+
+    deactivateWatchTower = (pubkey: string) =>
+        this.postRequest(`/v2/watchtower/client/deactivate/${pubkey}`);
+
+    removeWatchTower = (pubkey: string) =>
+        this.deleteRequest(`/v2/watchtower/client/${pubkey}`);
+
+    getWatchTowerStats = () => this.getRequest('/v2/watchtower/client/stats');
+
+    getWatchTowerPolicy = () => this.getRequest('/v2/watchtower/client/policy');
+    terminateWatchTowerSession = (data: any) =>
+        this.postRequest(
+            `/v2/watchtower/client/sessions/terminate/${data.session_id}`,
+            data
+        );
+    supportsWatchTower = () => true;
     supportsMessageSigning = () => true;
     supportsLnurlAuth = () => true;
     supportsOnchainSends = () => true;

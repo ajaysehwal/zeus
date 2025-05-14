@@ -130,6 +130,22 @@ class BackendUtils {
     // lndhub
     login = (...args: any[]) => this.call('login', args);
 
+    // watchtower
+    addWatchTower = (...args: any[]) => this.call('addWatchTower', args);
+    listWatchTowers = (...args: any[]) => this.call('listWatchTowers', args);
+    getWatchTowerInfo = (...args: any[]) =>
+        this.call('getWatchTowerInfo', args);
+    deactivateWatchTower = (...args: any[]) =>
+        this.call('deactivateWatchTower', args);
+    removeWatchTower = (...args: any[]) => this.call('removeWatchTower', args);
+    getWatchTowerStats = (...args: any[]) =>
+        this.call('getWatchTowerStats', args);
+    getWatchTowerPolicy = (...args: any[]) =>
+        this.call('getWatchTowerPolicy', args);
+    terminateWatchTowerSession = (...args: any[]) =>
+        this.call('terminateWatchTowerSession', args);
+    supportsWatchTower = () => this.call('supportsWatchTower');
+
     // services
     supportsFlowLSP = () => this.call('supportsFlowLSP');
     supportsLSPScustomMessage = () => this.call('supportsLSPScustomMessage');

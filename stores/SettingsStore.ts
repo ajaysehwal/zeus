@@ -141,6 +141,15 @@ interface EcashSettings {
     sweepThresholdSats?: number;
 }
 
+interface WatchtowerSettings {
+    enabled: boolean;
+    watchtowers: Array<{
+        pubkey: string;
+        address: string;
+        active: boolean;
+    }>;
+}
+
 export interface Settings {
     nodes?: Array<Node>;
     selectedNode?: number;
@@ -202,6 +211,7 @@ export interface Settings {
     bolt12Address: Bolt12AddressSettings;
     selectNodeOnStartup: boolean;
     ecash: EcashSettings;
+    watchtower: WatchtowerSettings;
 }
 
 export const FIAT_RATES_SOURCE_KEYS = [
@@ -1233,6 +1243,10 @@ export default class SettingsStore {
             enableCashu: false,
             automaticallySweep: false,
             sweepThresholdSats: 10000
+        },
+        watchtower: {
+            enabled: false,
+            watchtowers: []
         },
         selectNodeOnStartup: false
     };

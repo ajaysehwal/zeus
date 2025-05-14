@@ -1374,7 +1374,7 @@ PODS:
   - RNVectorIcons (7.1.0):
     - React
   - SocketRocket (0.7.0)
-  - SwiftProtobuf (1.28.2)
+  - SwiftProtobuf (1.29.0)
   - TcpSockets (4.0.0):
     - React
   - VisionCamera (4.3.2):
@@ -1681,10 +1681,10 @@ SPEC CHECKSUMS:
   boost: d3f49c53809116a5d38da093a8aa78bf551aed09
   BVLinearGradient: 7815a70ab485b7b155186dd0cc836363e0288cad
   CocoaAsyncSocket: 065fd1e645c7abab64f7a6a2007a48038fdc6a99
-  DoubleConversion: f16ae600a246532c4020132d54af21d0ddb2a385
+  DoubleConversion: 76ab83afb40bddeeee456813d9c04f67f78771b5
   FBLazyVector: 4bc164e5b5e6cfc288d2b5ff28643ea15fa1a589
   fmt: 4c2741a687cc09f0634a2e2c72a838b99f1ff120
-  glog: 08b301085f15bcbb6ff8632a8ebaf239aae04e6a
+  glog: fdfdfe5479092de0c4bdbebedd9056951f092c4f
   hermes-engine: 01d3e052018c2a13937aca1860fbedbccd4a41b7
   lottie-ios: 8f97d3271e155c2d688875c29cd3c74908aef5f8
   lottie-react-native: 5d89c05930d4180a1e39b1757d46e6c0eec90255
@@ -1769,7 +1769,7 @@ SPEC CHECKSUMS:
   RNSVG: e77adf5edb2302f0f10dd03a09e92bb9420d914e
   RNVectorIcons: 7159ba77d44e14808dcc50fbc03eb5666b1034fc
   SocketRocket: abac6f5de4d4d62d24e11868d7a2f427e0ef940d
-  SwiftProtobuf: 4dbaffec76a39a8dc5da23b40af1a5dc01a4c02d
+  SwiftProtobuf: b7aa08087e2ab6d162862d143020091254095f69
   TcpSockets: c5f030d4dbc758c4c7acb00496dc92c412b02cd2
   VisionCamera: 6ad4b86176f6fea45e90e380d3d530bc5e1abff9
   Yoga: ae3c32c514802d30f687a04a6a35b348506d411f

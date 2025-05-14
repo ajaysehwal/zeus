@@ -108,6 +108,16 @@ import {
 // @ts-ignore:next-line
 import type { WorkInfo } from './LndMobile.d.ts';
 import { OutPoint } from '../models/TransactionRequest';
+import {
+    addWatchTower,
+    listWatchTowers,
+    getWatchTowerInfo,
+    deactivateWatchTower,
+    removeWatchTower,
+    getWatchTowerStats,
+    getWatchTowerPolicy,
+    terminateWatchTowerSession
+} from './watchtower';
 
 export interface ILndMobileInjections {
     index: {
@@ -500,6 +510,16 @@ export interface ILndMobileInjections {
             isTestNet: boolean
         ) => Promise<string>;
     };
+    watchTowerClient: {
+        addTower: (pubkey: string, address: string) => Promise<any>;
+        listTowers: () => Promise<any>;
+        getTowerInfo: (pubkey: string) => Promise<any>;
+        deactivateTower: (pubkey: string) => Promise<any>;
+        removeTower: (pubkey: string) => Promise<any>;
+        stats: () => Promise<any>;
+        policy: () => Promise<any>;
+        terminateSession: (sessionId: string) => Promise<any>;
+    };
 }
 
 // @ts-ignore:next-line
@@ -609,5 +629,15 @@ export default {
     },
     chantools: {
         sweepRemoteClosed
+    },
+    watchTowerClient: {
+        addWatchTower,
+        listWatchTowers,
+        getWatchTowerInfo,
+        deactivateWatchTower,
+        removeWatchTower,
+        getWatchTowerStats,
+        getWatchTowerPolicy,
+        terminateWatchTowerSession
     }
 } as ILndMobileInjections;
