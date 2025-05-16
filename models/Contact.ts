@@ -12,6 +12,7 @@ export default class Contact extends BaseModel {
     public bolt12Offer: Array<string>;
     public onchainAddress: Array<string>;
     public pubkey: Array<string>;
+    public cashuPubkey: Array<string>;
     public nip05: Array<string>;
     public nostrNpub: Array<string>;
     public name: string;
