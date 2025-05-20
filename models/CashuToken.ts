@@ -17,9 +17,67 @@ export default class CashuToken extends BaseModel {
     public sent?: boolean;
     public spent?: boolean; // only for sent tokens
     public encodedToken?: string;
+    public lockedPubkey?: string;
+    public lockedDuration?: string;
     public proofs: Proof[];
     public created_at?: number;
     public received_at?: number;
+
+    constructor(data: any) {
+        super(data);
+
+        // Log input data for debugging
+        console.log('CashuToken constructor data:', {
+            hasRootLockProps: !!(data.lockedPubkey || data.lockedDuration),
+            hasNestedToken: !!(
+                data.token &&
+                Array.isArray(data.token) &&
+                data.token.length > 0
+            ),
+            hasNestedLockProps:
+                data.token && Array.isArray(data.token) && data.token.length > 0
+                    ? !!(
+                          data.token[0].lockedPubkey ||
+                          data.token[0].lockedDuration
+                      )
+                    : false
+        });
+
+        // First check if lock properties exist at the root level
+        if (data.lockedPubkey) {
+            this.lockedPubkey = data.lockedPubkey;
+            console.log(
+                'Setting lockedPubkey from root level:',
+                data.lockedPubkey
+            );
+        }
+        if (data.lockedDuration) {
+            this.lockedDuration = data.lockedDuration;
+            console.log(
+                'Setting lockedDuration from root level:',
+                data.lockedDuration
+            );
+        }
+
+        // Also handle nested token structure
+        if (data.token && Array.isArray(data.token) && data.token.length > 0) {
+            const tokenData = data.token[0];
+            if (tokenData.lockedPubkey) {
+                this.lockedPubkey = tokenData.lockedPubkey;
+                console.log(
+                    'Setting lockedPubkey from nested token:',
+                    tokenData.lockedPubkey
+                );
+            }
+            if (tokenData.lockedDuration) {
+                this.lockedDuration = tokenData.lockedDuration;
+                console.log(
+                    'Setting lockedDuration from nested token:',
+                    tokenData.lockedDuration
+                );
+            }
+        }
+    }
 
     @computed public get model(): string {
         return localeString('cashu.token');
@@ -55,5 +113,13 @@ export default class CashuToken extends BaseModel {
 
     @computed public get getTimestamp(): number {
         return this.received ? this.received_at || 0 : this.created_at || 0;
+    }
+
+    @computed public get getLockedDuration(): number {
+        return this.lockedDuration ? parseInt(this.lockedDuration) : 0;
+    }
+
+    @computed public get getLockedPubkey(): string {
+        return this.lockedPubkey || '';
     }
 }

@@ -101,6 +101,22 @@ export default class Contact extends BaseModel {
         );
     }
 
+    @computed public get isSingleCashuPubkey(): boolean {
+        return (
+            this.cashuPubkey &&
+            this.cashuPubkey.length === 1 &&
+            this.cashuPubkey[0] !== '' &&
+            (!this.lnAddress[0] || this.lnAddress[0] === '') &&
+            (!this.bolt12Address ||
+                !this.bolt12Address[0] ||
+                this.bolt12Address[0] === '') &&
+            (!this.onchainAddress[0] || this.onchainAddress[0] === '') &&
+            (!this.bolt12Offer ||
+                !this.bolt12Offer[0] ||
+                this.bolt12Offer[0] === '')
+        );
+    }
+
     @computed public get hasLnAddress(): boolean {
         return this.lnAddress?.length > 0 && this.lnAddress[0] !== '';
     }
@@ -119,6 +135,10 @@ export default class Contact extends BaseModel {
 
     @computed public get hasPubkey(): boolean {
         return this.pubkey?.length > 0 && this.pubkey[0] !== '';
+    }
+
+    @computed public get hasCashuPubkey(): boolean {
+        return this.cashuPubkey?.length > 0 && this.cashuPubkey[0] !== '';
     }
 
     @computed public get hasMultiplePayableAddresses(): boolean {

@@ -730,7 +730,22 @@ const handleAnything = async (
         ];
     } else if (CashuUtils.isValidCashuToken(value)) {
         const tokenObj = CashuUtils.decodeCashuToken(value);
+        console.log('Processing Cashu token:', {
+            memo: tokenObj.memo,
+            mint: tokenObj.mint,
+            proofCount: tokenObj.proofs?.length || 0,
+            hasLockInfo: !!(tokenObj.lockedPubkey || tokenObj.lockedDuration)
+        });
+
+        // Create the token and provide debugging info
         const decoded = new CashuToken(tokenObj);
+
+        // Log lock information to debug
+        console.log('Decoded token lock info:', {
+            lockedPubkey: decoded.lockedPubkey,
+            lockedDuration: decoded.lockedDuration
+        });
+
         return [
             'CashuToken',
             {

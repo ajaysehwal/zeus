@@ -31,7 +31,13 @@ import NostrichIcon from '../../assets/images/SVG/Nostrich.svg';
 
 interface ContactsSettingsProps {
     navigation: StackNavigationProp<any, any>;
-    route: Route<'Contacts', { SendScreen: boolean }>;
+    route: Route<
+        'Contacts',
+        {
+            SendScreen: boolean;
+            returnToCashuLockSettings?: boolean;
+        }
+    >;
     ContactStore: ContactStore;
 }
 
@@ -39,6 +45,7 @@ interface ContactsSettingsState {
     search: string;
     SendScreen: boolean;
     deletionAwaitingConfirmation: boolean;
+    returnToCashuLockSettings: boolean;
 }
 
 @inject('ContactStore')
@@ -50,10 +57,13 @@ export default class Contacts extends React.Component<
     constructor(props: ContactsSettingsProps) {
         super(props);
         const SendScreen = this.props.route.params?.SendScreen;
+        const returnToCashuLockSettings =
+            this.props.route.params?.returnToCashuLockSettings || false;
         this.state = {
             search: '',
             SendScreen,
-            deletionAwaitingConfirmation: false
+            deletionAwaitingConfirmation: false,
+            returnToCashuLockSettings
         };
     }
 
@@ -71,6 +81,7 @@ export default class Contacts extends React.Component<
             hasBolt12Offer,
             hasOnchainAddress,
             hasPubkey,
+            hasCashuPubkey,
             hasMultiplePayableAddresses
         } = contact;
 
@@ -86,7 +97,6 @@ export default class Contacts extends React.Component<
                   )}...${item.lnAddress[0].slice(-10)}`
                 : item.lnAddress[0];
         }
-
         if (hasBolt12Address) {
             return item.bolt12Address[0].length > 23
                 ? `${item.bolt12Address[0].slice(
@@ -120,41 +130,76 @@ export default class Contacts extends React.Component<
                 : item.pubkey[0];
         }
 
+        if (hasCashuPubkey) {
+            return item.cashuPubkey[0].length > 23
+                ? `${item.cashuPubkey[0].slice(
+                      0,
+                      12
+                  )}...${item.cashuPubkey[0].slice(-8)}`
+                : item.cashuPubkey[0];
+        }
+
         return localeString('views.Settings.Contacts.noAddress');
     };
 
     renderContactItem = ({ item }: { item: Contact }) => {
         const contact = new Contact(item);
         const { hasMultiplePayableAddresses } = contact;
+
+        // Check if contact has Cashu pubkey
+        const isCashuPubkeyAvailable =
+            contact.cashuPubkey && contact.cashuPubkey.length > 0;
+
         return (
             <TouchableOpacity
                 onPress={() => {
                     if (this.state.SendScreen && !hasMultiplePayableAddresses) {
-                        if (contact.isSingleLnAddress) {
-                            this.props.navigation.navigate('Send', {
-                                destination: item.lnAddress[0],
-                                contactName: item.name
-                            });
-                        } else if (contact.isSingleBolt12Address) {
-                            this.props.navigation.navigate('Send', {
-                                destination: item.bolt12Address[0],
-                                contactName: item.name
-                            });
-                        } else if (contact.isSingleBolt12Offer) {
-                            this.props.navigation.navigate('Send', {
-                                destination: item.bolt12Offer[0],
-                                contactName: item.name
-                            });
-                        } else if (contact.isSingleOnchainAddress) {
-                            this.props.navigation.navigate('Send', {
-                                destination: item.onchainAddress[0],
-                                contactName: item.name
-                            });
-                        } else if (contact.isSinglePubkey) {
-                            this.props.navigation.navigate('Send', {
-                                destination: item.pubkey[0],
-                                contactName: item.name
-                            });
+                        if (this.state.returnToCashuLockSettings) {
+                            // Navigate back to CashuLockSettings with contact info
+                            // If contact has a Cashu pubkey, use it, otherwise pass null
+                            this.props.navigation.navigate(
+                                'CashuLockSettings',
+                                {
+                                    destination: isCashuPubkeyAvailable
+                                        ? item.cashuPubkey[0]
+                                        : null,
+                                    contactName: item.name,
+                                    hasCashuPubkey: isCashuPubkeyAvailable
+                                }
+                            );
+                        } else {
+                            // Standard Send screen behavior
+                            if (contact.isSingleLnAddress) {
+                                this.props.navigation.navigate('Send', {
+                                    destination: item.lnAddress[0],
+                                    contactName: item.name
+                                });
+                            } else if (contact.isSingleBolt12Address) {
+                                this.props.navigation.navigate('Send', {
+                                    destination: item.bolt12Address[0],
+                                    contactName: item.name
+                                });
+                            } else if (contact.isSingleBolt12Offer) {
+                                this.props.navigation.navigate('Send', {
+                                    destination: item.bolt12Offer[0],
+                                    contactName: item.name
+                                });
+                            } else if (contact.isSingleOnchainAddress) {
+                                this.props.navigation.navigate('Send', {
+                                    destination: item.onchainAddress[0],
+                                    contactName: item.name
+                                });
+                            } else if (contact.isSinglePubkey) {
+                                this.props.navigation.navigate('Send', {
+                                    destination: item.pubkey[0],
+                                    contactName: item.name
+                                });
+                            } else if (contact.isSingleCashuPubkey) {
+                                this.props.navigation.navigate('Send', {
+                                    destination: item.cashuPubkey[0],
+                                    contactName: item.name
+                                });
+                            }
                         }
                     } else {
                         this.props.navigation.navigate('ContactDetails', {
@@ -183,7 +228,7 @@ export default class Contacts extends React.Component<
                             }}
                         />
                     )}
-                    <View>
+                    <View style={{ flex: 1 }}>
                         <Text
                             style={{ fontSize: 16, color: themeColor('text') }}
                         >
@@ -231,7 +276,8 @@ export default class Contacts extends React.Component<
                 hasMatch('nip05') ||
                 hasMatch('onchainAddress') ||
                 hasMatch('nostrNpub') ||
-                hasMatch('pubkey')
+                hasMatch('pubkey') ||
+                hasMatch('cashuPubkey')
             );
         });
 

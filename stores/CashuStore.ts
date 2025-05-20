@@ -2111,11 +2111,16 @@ export default class CashuStore {
     @action
     public mintToken = async ({
         memo,
-        value
+        value,
+        lockedPubkey,
+        lockedDuration
     }: {
         memo: string;
         value: string;
+        lockedPubkey?: string;
+        lockedDuration?: string;
     }): Promise<{ token: string; decoded: CashuToken } | undefined> => {
+        console.log('mintToken', { memo, value, lockedPubkey, lockedDuration });
         runInAction(() => {
             this.mintingToken = true;
             this.mintingTokenError = false;
@@ -2217,13 +2222,32 @@ export default class CashuStore {
                 this.cashuWallets[mintUrl].balanceSats - Number(value)
             );
 
-            const tokenObj = {
+            // Debug the lock parameters
+            console.log('Creating token with lock params:', {
+                lockedPubkey,
+                lockedDuration
+            });
+
+            const tokenObj: any = {
                 mint: mintUrl,
                 proofs: proofsToSend,
                 memo,
                 unit: 'sat'
             };
+
+            // Make sure lock parameters are included in the token
+            if (lockedPubkey) {
+                tokenObj.lockedPubkey = lockedPubkey;
+                tokenObj.lockedDuration = lockedDuration;
+            }
+
+            // Add debugging before encoding
+            console.log('Token object before encoding:', tokenObj);
+
             const token = getEncodedToken(tokenObj);
+            console.log('Encoded token:', token);
+
+            // Create proper CashuToken object with all fields
             const decoded = new CashuToken({
                 ...tokenObj,
                 sent: true,

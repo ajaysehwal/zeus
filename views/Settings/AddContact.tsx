@@ -624,7 +624,7 @@ export default class AddContact extends React.Component<
             addFieldsToArray(
                 cashuPubkey,
                 'cashuPubkey',
-                <LightningBolt />,
+                <CashuIcon />,
                 isValidCashuPubkey,
                 this.onChangeCashuPubkey,
                 localeString('views.Settings.AddContact.cashuPubkey')

@@ -241,6 +241,25 @@ export default class CashuTokenView extends React.Component<
                                 sensitive
                             />
                         )}
+
+                        {/* Display lock information if present */}
+                        {decoded.lockedPubkey && (
+                            <KeyValue
+                                keyValue={localeString('cashu.lockedToKey')}
+                                value={decoded.lockedPubkey}
+                                sensitive
+                            />
+                        )}
+
+                        {decoded.lockedDuration && (
+                            <KeyValue
+                                keyValue={localeString(
+                                    'cashu.lockedForDuration'
+                                )}
+                                value={decoded.lockedDuration}
+                                sensitive
+                            />
+                        )}
                     </View>
                 </ScrollView>
                 {!received && (!sent || (sent && !spent)) && (
