@@ -1,15 +1,8 @@
 import * as React from 'react';
-import {
-    Dimensions,
-    ScrollView,
-    StyleSheet,
-    View,
-    TouchableOpacity
-} from 'react-native';
+import { Dimensions, ScrollView, StyleSheet, View } from 'react-native';
 import { inject, observer } from 'mobx-react';
 import { Route } from '@react-navigation/native';
 import { StackNavigationProp } from '@react-navigation/stack';
-import Ionicons from 'react-native-vector-icons/Ionicons';
 
 import AmountInput, { getSatAmount } from '../../components/AmountInput';
 import Button from '../../components/Button';
@@ -39,7 +32,13 @@ interface MintTokenProps {
         {
             amount?: string;
             lockedPubkey?: string;
-            lockedDuration?: string;
+            lockTime?: string;
+            memo?: string;
+            value?: string;
+            satAmount?: string | number;
+            account?: string;
+            duration?: string;
+            fromLockSettings?: boolean;
         }
     >;
 }
@@ -50,7 +49,8 @@ interface MintTokenState {
     value: string;
     satAmount: string | number;
     lockedPubkey: string;
-    lockedDuration: string;
+    lockTime: number;
+    duration: string;
     account: string;
 }
 
@@ -68,7 +68,8 @@ export default class MintToken extends React.Component<
             value: '',
             satAmount: '',
             lockedPubkey: '',
-            lockedDuration: '',
+            lockTime: 0,
+            duration: '',
             account: 'default'
         };
 
@@ -101,30 +102,55 @@ export default class MintToken extends React.Component<
         this.props.navigation.removeListener('focus', this.handleScreenFocus);
     }
 
-    handleScreenFocus = () => {
-        const { route } = this.props;
-        if (route.params?.lockedPubkey) {
-            this.setState({
-                lockedPubkey: route.params.lockedPubkey,
-                lockedDuration: route.params.lockedDuration || ''
-            });
-            this.props.navigation.setParams({
-                lockedPubkey: undefined,
-                lockedDuration: undefined
-            });
-        }
+    saveFormData = () => {
+        const { memo, value, satAmount, account } = this.state;
+        this.props.navigation.setParams({
+            memo,
+            value,
+            satAmount,
+            account
+        });
     };
 
-    // Convert duration string to seconds
+    handleScreenFocus = () => {
+        const { route } = this.props;
+        const params = route.params || {};
+
+        console.log('MintToken.handleScreenFocus called, params:', params);
+
+        if (params.fromLockSettings) {
+            const stateUpdate: Partial<MintTokenState> = {
+                lockedPubkey: params.lockedPubkey,
+                duration: params.duration,
+                lockTime: this.convertDurationToSeconds(params.duration || ''),
+                memo: params.memo || this.state.memo,
+                value: params.value || this.state.value,
+                satAmount: params.satAmount || this.state.satAmount,
+                account: params.account || this.state.account
+            };
+
+            console.log('Updating state with:', stateUpdate);
+            this.setState(stateUpdate as MintTokenState);
+        }
+
+        // Clear navigation params
+        this.props.navigation.setParams({
+            lockedPubkey: undefined,
+            duration: undefined,
+            memo: undefined,
+            value: undefined,
+            satAmount: undefined,
+            account: undefined,
+            fromLockSettings: undefined
+        });
+    };
+
     convertDurationToSeconds = (duration: string): number => {
         if (!duration) return 0;
 
-        // Handle "forever" as 1000 years in seconds
         if (duration === 'forever') {
-            return 31536000000; // 1000 years in seconds
+            return 31536000000;
         }
-
-        // Parse custom durations like "1 day", "2 weeks", etc.
         const parts = duration.split(' ');
         if (parts.length !== 2) return 0;
 
@@ -153,28 +179,26 @@ export default class MintToken extends React.Component<
         }
     };
 
-    handleLockSettingsSave = (pubkey: string, duration: string) => {
+    handleLockSettingsSave = (lockedPubkey: string, duration: string) => {
         console.log(
             'Lock settings saved with pubkey:',
-            pubkey,
+            lockedPubkey,
             'duration:',
             duration
         );
-
-        // Calculate seconds for the duration
-        const durationSeconds = this.convertDurationToSeconds(duration);
-        console.log('Duration in seconds:', durationSeconds);
+        const lockTime = this.convertDurationToSeconds(duration);
+        console.log('Duration in seconds:', lockTime);
 
         this.setState({
-            lockedPubkey: pubkey,
-            lockedDuration: duration
+            lockedPubkey,
+            lockTime,
+            duration
         });
     };
 
     render() {
         const { CashuStore, navigation } = this.props;
-        const { memo, value, satAmount, lockedPubkey, lockedDuration } =
-            this.state;
+        const { memo, value, satAmount, lockedPubkey, duration } = this.state;
         const { fontScale } = Dimensions.get('window');
 
         const { mintToken, mintingToken, loadingMsg } = CashuStore;
@@ -195,7 +219,6 @@ export default class MintToken extends React.Component<
                     }}
                     navigation={navigation}
                 />
-
                 <View style={{ flex: 1 }}>
                     <ScrollView
                         style={styles.content}
@@ -224,7 +247,6 @@ export default class MintToken extends React.Component<
                                     )}
                                 </View>
                             )}
-
                             {!loading && !mintingToken && (
                                 <>
                                     <>
@@ -266,9 +288,10 @@ export default class MintToken extends React.Component<
                                             )}
                                             value={memo}
                                             onChangeText={(text: string) => {
-                                                this.setState({
-                                                    memo: text
-                                                });
+                                                this.setState(
+                                                    { memo: text },
+                                                    this.saveFormData
+                                                );
                                             }}
                                         />
                                     </>
@@ -282,89 +305,29 @@ export default class MintToken extends React.Component<
                                             amount: string,
                                             satAmount: string | number
                                         ) => {
-                                            this.setState({
-                                                value: amount,
-                                                satAmount
-                                            });
+                                            this.setState(
+                                                {
+                                                    value: amount,
+                                                    satAmount
+                                                },
+                                                this.saveFormData
+                                            );
                                         }}
                                     />
 
                                     {/* Lock to Pubkey (optional) field */}
-                                    <View
-                                        style={{
-                                            marginTop: 20,
-                                            marginBottom: 10
-                                        }}
-                                    >
-                                        <TouchableOpacity
-                                            activeOpacity={0.85}
-                                            onPress={() => {
-                                                console.log(
-                                                    'handleLockSettingsSave type:',
-                                                    typeof this
-                                                        .handleLockSettingsSave
-                                                );
-                                                (
-                                                    global as any
-                                                ).handleCashuLockSettingsSave =
-                                                    this.handleLockSettingsSave;
-                                                console.log(
-                                                    'Global function set:',
-                                                    typeof (global as any)
-                                                        .handleCashuLockSettingsSave
-                                                );
-
-                                                this.props.navigation.navigate(
-                                                    'CashuLockSettings',
-                                                    {
-                                                        currentPubkey:
-                                                            lockedPubkey,
-                                                        currentDuration:
-                                                            lockedDuration,
-                                                        fromMintToken: true
-                                                    }
-                                                );
+                                    <View style={styles.lockContainer}>
+                                        <Button
+                                            icon={{
+                                                type: 'ionicon',
+                                                name: lockedPubkey
+                                                    ? 'lock-closed-outline'
+                                                    : 'lock-open-outline',
+                                                size: 20,
+                                                color: themeColor('text')
                                             }}
-                                            style={{
-                                                flexDirection: 'row',
-                                                alignItems: 'center',
-                                                alignSelf: 'center',
-                                                justifyContent: 'center',
-                                                paddingVertical: 12,
-                                                paddingHorizontal: 22,
-                                                borderRadius: 10,
-                                                backgroundColor:
-                                                    themeColor('secondary'),
-                                                shadowColor: '#000',
-                                                shadowOffset: {
-                                                    width: 0,
-                                                    height: 2
-                                                },
-                                                shadowOpacity: 0.08,
-                                                shadowRadius: 8,
-                                                elevation: 2,
-                                                width: '90%'
-                                            }}
-                                        >
-                                            <Ionicons
-                                                name={
-                                                    lockedPubkey
-                                                        ? 'lock-closed-outline'
-                                                        : 'lock-open-outline'
-                                                }
-                                                size={20}
-                                                color={themeColor('text')}
-                                                style={{ marginRight: 10 }}
-                                            />
-                                            <Text
-                                                style={{
-                                                    color: themeColor('text'),
-                                                    fontFamily:
-                                                        'PPNeueMontreal-Medium',
-                                                    fontSize: 16
-                                                }}
-                                            >
-                                                {lockedPubkey
+                                            title={
+                                                lockedPubkey
                                                     ? localeString(
                                                           'cashu.lockedTo'
                                                       )
@@ -377,16 +340,41 @@ export default class MintToken extends React.Component<
                                                           )
                                                           .replace(
                                                               '{duration}',
-                                                              lockedDuration ||
+                                                              duration ||
                                                                   localeString(
                                                                       'cashu.noDuration'
                                                                   )
                                                           )
                                                     : localeString(
                                                           'cashu.lockToPubkey'
-                                                      )}
-                                            </Text>
-                                        </TouchableOpacity>
+                                                      )
+                                            }
+                                            onPress={() => {
+                                                navigation.navigate(
+                                                    'CashuLockSettings',
+                                                    {
+                                                        currentLockPubkey:
+                                                            lockedPubkey,
+                                                        currentDuration:
+                                                            duration,
+                                                        fromMintToken: true,
+                                                        memo: this.state.memo,
+                                                        value: this.state.value,
+                                                        satAmount:
+                                                            this.state
+                                                                .satAmount,
+                                                        account:
+                                                            this.state.account
+                                                    }
+                                                );
+                                            }}
+                                            containerStyle={
+                                                styles.lockButtonContainer
+                                            }
+                                            secondary={true}
+                                            buttonStyle={styles.lockButton}
+                                            titleStyle={styles.lockButtonText}
+                                        />
                                     </View>
 
                                     <View style={styles.button}>
@@ -395,14 +383,11 @@ export default class MintToken extends React.Component<
                                                 'cashu.mintEcashToken'
                                             )}
                                             onPress={() => {
-                                                // Calculate duration in seconds if pubkey is locked
                                                 const lockSeconds = lockedPubkey
                                                     ? this.convertDurationToSeconds(
-                                                          lockedDuration
+                                                          duration
                                                       )
                                                     : 0;
-
-                                                // Add lock data to token params if pubkey is set
                                                 const params: any = {
                                                     memo,
                                                     value:
@@ -410,27 +395,11 @@ export default class MintToken extends React.Component<
                                                         '0'
                                                 };
 
-                                                console.log('params', params);
-                                                console.log(
-                                                    'lockedPubkey',
-                                                    lockedPubkey
-                                                );
-                                                console.log(
-                                                    'lockedDuration',
-                                                    lockedDuration
-                                                );
-                                                console.log(
-                                                    'lockSeconds',
-                                                    lockSeconds
-                                                );
-
                                                 if (lockedPubkey) {
-                                                    // Only send pubkey and duration in seconds
                                                     params.lockedPubkey =
                                                         lockedPubkey;
-                                                    // Use lockSeconds as the duration value
-                                                    params.lockedDuration =
-                                                        lockSeconds.toString();
+                                                    params.lockTime =
+                                                        lockSeconds;
                                                 }
 
                                                 mintToken(params).then(
@@ -483,6 +452,25 @@ const styles = StyleSheet.create({
         paddingBottom: 15
     },
     text: {
+        fontFamily: 'PPNeueMontreal-Book'
+    },
+    lockContainer: {
+        marginTop: 20,
+        marginBottom: 10
+    },
+    lockButtonContainer: {
+        width: '90%',
+        alignSelf: 'center'
+    },
+    lockButton: {
+        backgroundColor: themeColor('secondary'),
+        borderColor: themeColor('text'),
+        opacity: 0.8,
+        height: 45
+    },
+    lockButtonText: {
+        color: themeColor('text'),
+        fontSize: 14,
         fontFamily: 'PPNeueMontreal-Book'
     }
 });

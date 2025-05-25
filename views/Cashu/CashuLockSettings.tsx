@@ -9,6 +9,7 @@ import Header from '../../components/Header';
 import Screen from '../../components/Screen';
 import Text from '../../components/Text';
 import TextInput from '../../components/TextInput';
+import Button from '../../components/Button';
 
 import ContactStore from '../../stores/ContactStore';
 
@@ -25,25 +26,33 @@ interface CashuLockSettingsProps {
         'CashuLockSettings',
         {
             onSave?: (pubkey: string, duration: string) => void;
-            currentPubkey?: string;
+            currentLockPubkey?: string;
             currentDuration?: string;
             destination?: string | null;
             contactName?: string;
             hasCashuPubkey?: boolean;
             fromMintToken?: boolean;
+            memo?: string;
+            value?: string;
+            satAmount?: string | number;
+            account?: string;
         }
     >;
 }
 
 interface CashuLockSettingsState {
-    pubkey: string;
+    lockedPubkey: string;
     duration: string;
-    pubkeyError: string;
+    lockedPubkeyError: string;
     showCustomDuration: boolean;
     customDurationValue: string;
     customDurationUnit: string;
     customDurationError: string;
     showUnitDropdown: boolean;
+    memo: string;
+    value: string;
+    satAmount: string | number;
+    account: string;
 }
 
 @inject('ContactStore')
@@ -52,20 +61,43 @@ export default class CashuLockSettings extends React.Component<
     CashuLockSettingsProps,
     CashuLockSettingsState
 > {
+    private originalFormData: {
+        memo?: string;
+        value?: string;
+        satAmount?: string | number;
+        account?: string;
+    } | null = null;
+
     constructor(props: CashuLockSettingsProps) {
         super(props);
         const { route } = props;
-        const { currentPubkey, currentDuration } = route.params || {};
+        const {
+            currentLockPubkey,
+            currentDuration,
+            memo,
+            value,
+            satAmount,
+            account
+        } = route.params || {};
+
+        console.log(
+            'CashuLockSettings constructor, route params:',
+            route.params
+        );
 
         this.state = {
-            pubkey: currentPubkey || '',
+            lockedPubkey: currentLockPubkey || '',
             duration: currentDuration || '',
-            pubkeyError: '',
+            lockedPubkeyError: '',
             showCustomDuration: false,
             customDurationValue: '',
             customDurationUnit: 'day',
             customDurationError: '',
-            showUnitDropdown: false
+            showUnitDropdown: false,
+            memo: memo || '',
+            value: value || '',
+            satAmount: satAmount || '',
+            account: account || 'default'
         };
 
         this.handleContactSelection = this.handleContactSelection.bind(this);
@@ -82,21 +114,33 @@ export default class CashuLockSettings extends React.Component<
     handleFocus = () => {
         const { route } = this.props;
         const { params } = route;
+
+        // Store the original form data when first mounting
+        if (!this.originalFormData && params) {
+            this.originalFormData = {
+                memo: params.memo,
+                value: params.value,
+                satAmount: params.satAmount,
+                account: params.account
+            };
+        }
+
         if (params?.contactName) {
             if (params.hasCashuPubkey === false) {
-                // Selected contact doesn't have a Cashu pubkey
                 this.setState({
-                    pubkey: '',
-                    pubkeyError: localeString('cashu.contactNoCashuPubkey')
+                    lockedPubkey: '',
+                    lockedPubkeyError: localeString(
+                        'cashu.contactNoCashuPubkey'
+                    )
                 });
             } else if (params?.destination) {
-                // Contact has a Cashu pubkey
                 this.setState({
-                    pubkey: params.destination,
-                    pubkeyError: ''
+                    lockedPubkey: params.destination,
+                    lockedPubkeyError: ''
                 });
             }
-            // Clear the params to prevent setting the value again if we return to this screen
+
+            // Only clear contact-related params
             this.props.navigation.setParams({
                 destination: undefined,
                 contactName: undefined,
@@ -105,10 +149,10 @@ export default class CashuLockSettings extends React.Component<
         }
     };
 
-    handleContactSelection(pubkey: string) {
+    handleContactSelection(lockedPubkey: string) {
         this.setState({
-            pubkey,
-            pubkeyError: ''
+            lockedPubkey,
+            lockedPubkeyError: ''
         });
     }
 
@@ -137,10 +181,10 @@ export default class CashuLockSettings extends React.Component<
         return '';
     };
 
-    handlePubkeyChange = (text: string) => {
+    handleLockedPubkeyChange = (text: string) => {
         this.setState({
-            pubkey: text,
-            pubkeyError: ''
+            lockedPubkey: text,
+            lockedPubkeyError: ''
         });
     };
 
@@ -169,39 +213,26 @@ export default class CashuLockSettings extends React.Component<
     };
 
     handleSave = () => {
-        const { navigation, route } = this.props;
+        const { navigation } = this.props;
         const {
-            pubkey,
+            lockedPubkey,
             duration,
-            pubkeyError,
+            lockedPubkeyError,
             showCustomDuration,
             customDurationValue
         } = this.state;
-        const { onSave } = route.params || {};
 
         console.log('*** LOCK BUTTON PRESSED ***');
-        console.log('pubkey:', pubkey);
+        console.log('lockedPubkey:', lockedPubkey);
         console.log('duration:', duration);
         console.log('showCustomDuration:', showCustomDuration);
         console.log('customDurationValue:', customDurationValue);
-        console.log('onSave exists:', !!onSave);
-        console.log('onSave type:', typeof onSave);
-        console.log('route params:', route.params);
+        console.log('Original form data:', this.originalFormData);
 
-        console.log(
-            'Global callback exists:',
-            !!(global as any).handleCashuLockSettingsSave
-        );
-        console.log(
-            'Global callback type:',
-            typeof (global as any).handleCashuLockSettingsSave
-        );
-        console.log('fromMintToken flag:', route.params?.fromMintToken);
-
-        const validationError = this.validatePubkey(pubkey);
+        const validationError = this.validatePubkey(lockedPubkey);
         if (validationError) {
             console.log('Pubkey validation failed:', validationError);
-            this.setState({ pubkeyError: validationError });
+            this.setState({ lockedPubkeyError: validationError });
             return;
         }
 
@@ -212,10 +243,11 @@ export default class CashuLockSettings extends React.Component<
             });
             return;
         }
+
         if (
-            !pubkey ||
-            !AddressUtils.isValidLightningPubKey(pubkey) ||
-            pubkeyError
+            !lockedPubkey ||
+            !AddressUtils.isValidLightningPubKey(lockedPubkey) ||
+            lockedPubkeyError
         ) {
             console.log('Invalid pubkey, cannot proceed');
             return;
@@ -230,70 +262,34 @@ export default class CashuLockSettings extends React.Component<
             ? this.getCustomDurationString()
             : duration;
 
-        console.log('Final duration:', finalDuration);
-
         try {
-            if (
-                typeof (global as any).handleCashuLockSettingsSave ===
-                'function'
-            ) {
-                console.log(
-                    'Using global callback with:',
-                    pubkey,
-                    finalDuration
-                );
+            // Create navigation params with lock settings
+            const navigationParams: any = {
+                lockedPubkey,
+                duration: finalDuration,
+                fromLockSettings: true
+            };
 
-                // Call the callback
-                (global as any).handleCashuLockSettingsSave(
-                    pubkey,
-                    finalDuration
+            // Add original form data if it exists
+            if (this.originalFormData) {
+                Object.entries(this.originalFormData).forEach(
+                    ([key, value]) => {
+                        if (value !== undefined) {
+                            navigationParams[key] = value;
+                        }
+                    }
                 );
-
-                // Navigate back to MintToken with the lock data as params
-                navigation.navigate('MintToken', {
-                    lockedPubkey: pubkey,
-                    lockedDuration: finalDuration
-                });
             }
-            // Fall back to direct callback if available
-            else if (
-                route.params &&
-                typeof route.params.onSave === 'function'
-            ) {
-                console.log(
-                    'Using direct callback with:',
-                    pubkey,
-                    finalDuration
-                );
 
-                // Call the direct callback
-                route.params.onSave(pubkey, finalDuration);
-
-                // Navigate back with lock params
-                navigation.navigate('MintToken', {
-                    lockedPubkey: pubkey,
-                    lockedDuration: finalDuration
-                });
-            }
-            // No callback available
-            else {
-                console.warn(
-                    'No callback found - saving values and returning anyway'
-                );
-
-                // Always navigate back to MintToken with lock params
-                navigation.navigate('MintToken', {
-                    lockedPubkey: pubkey,
-                    lockedDuration: finalDuration
-                });
-            }
+            console.log(
+                'Navigating back to MintToken with params:',
+                navigationParams
+            );
+            navigation.navigate('MintToken', navigationParams);
         } catch (error) {
-            // Log any errors that occur during the save process
             console.error('Error in handleSave:', error);
-
-            // Show error message through error state
             this.setState({
-                pubkeyError: localeString('cashu.errorSavingLock')
+                lockedPubkeyError: localeString('cashu.errorSavingLock')
             });
         }
     };
@@ -301,20 +297,18 @@ export default class CashuLockSettings extends React.Component<
     render() {
         const { navigation } = this.props;
         const {
-            pubkey,
+            lockedPubkey,
             duration,
-            pubkeyError,
+            lockedPubkeyError,
             showCustomDuration,
             customDurationValue,
             customDurationUnit
         } = this.state;
 
-        // Check if the form is valid for enabling the save button
         const isFormValid =
-            pubkey &&
-            AddressUtils.isValidLightningPubKey(pubkey) &&
-            !pubkeyError &&
-            // Require either a selected duration or a valid custom duration
+            lockedPubkey &&
+            AddressUtils.isValidLightningPubKey(lockedPubkey) &&
+            !lockedPubkeyError &&
             ((duration && !showCustomDuration) ||
                 (showCustomDuration &&
                     customDurationValue &&
@@ -326,6 +320,7 @@ export default class CashuLockSettings extends React.Component<
             <Screen>
                 <Header
                     leftComponent="Back"
+                    navigateBackOnBackPress={true}
                     centerComponent={{
                         text: localeString('cashu.lockEcash'),
                         style: {
@@ -356,13 +351,13 @@ export default class CashuLockSettings extends React.Component<
                         style={{
                             flexDirection: 'row',
                             alignItems: 'center',
-                            marginBottom: 20
+                            marginBottom: 5
                         }}
                     >
                         <TextInput
-                            placeholder={'lnbc1...'}
-                            value={pubkey}
-                            onChangeText={this.handlePubkeyChange}
+                            placeholder={'02abc...'}
+                            value={lockedPubkey}
+                            onChangeText={this.handleLockedPubkeyChange}
                             style={{
                                 flex: 1,
                                 paddingHorizontal: 15,
@@ -391,7 +386,7 @@ export default class CashuLockSettings extends React.Component<
                         </TouchableOpacity>
                     </View>
 
-                    {pubkeyError ? (
+                    {lockedPubkeyError ? (
                         <Text
                             style={{
                                 color: themeColor('delete'),
@@ -400,40 +395,30 @@ export default class CashuLockSettings extends React.Component<
                                 marginTop: -12
                             }}
                         >
-                            {pubkeyError}
+                            {lockedPubkeyError}
                         </Text>
                     ) : null}
 
-                    <TouchableOpacity
+                    <Button
+                        icon={{
+                            type: 'ionicon',
+                            name: 'clipboard-outline',
+                            size: 20,
+                            color: themeColor('secondary')
+                        }}
                         onPress={async () => {
                             const text = await Clipboard.getString();
-                            const error = this.validatePubkey(text);
-                            this.setState({
-                                pubkey: text,
-                                pubkeyError: error
-                            });
+                            if (AddressUtils.isValidLightningPubKey(text)) {
+                                this.setState({
+                                    lockedPubkey: text,
+                                    lockedPubkeyError: ''
+                                });
+                            }
                         }}
-                        style={{
-                            backgroundColor: themeColor('text'),
-                            borderRadius: 8,
-                            height: 48,
-                            justifyContent: 'center',
-                            alignItems: 'center',
-                            marginBottom: 24
-                        }}
-                        activeOpacity={0.7}
-                    >
-                        <Text
-                            style={{
-                                color: themeColor('secondary'),
-                                fontWeight: '600',
-                                fontSize: 15,
-                                fontFamily: 'PPNeueMontreal-Medium'
-                            }}
-                        >
-                            {localeString('general.paste')}
-                        </Text>
-                    </TouchableOpacity>
+                        buttonStyle={styles.pasteButton}
+                        titleStyle={styles.pasteButtonText}
+                        title={localeString('general.paste')}
+                    />
 
                     <View
                         style={{
@@ -466,11 +451,10 @@ export default class CashuLockSettings extends React.Component<
                         style={{
                             flexDirection: 'row',
                             justifyContent: 'center',
-                            marginBottom: 12,
                             gap: 8
                         }}
                     >
-                        {['1 day', '1 week', 'forever', 'Custom'].map(
+                        {['1 day', '1 week', 'Forever', 'Custom'].map(
                             (option) => (
                                 <TouchableOpacity
                                     key={option}
@@ -554,10 +538,11 @@ export default class CashuLockSettings extends React.Component<
                                 style={{
                                     flexDirection: 'row',
                                     marginBottom: 8,
-                                    alignItems: 'center'
+                                    alignItems: 'center',
+                                    gap: 12
                                 }}
                             >
-                                <View style={{ flex: 1, marginRight: 10 }}>
+                                <View style={{ flex: 1 }}>
                                     <TextInput
                                         placeholder={'1-999'}
                                         value={customDurationValue}
@@ -566,11 +551,15 @@ export default class CashuLockSettings extends React.Component<
                                         }
                                         style={{
                                             paddingHorizontal: 15,
-                                            height: 48
+                                            height: 48,
+                                            borderRadius: 12,
+                                            backgroundColor:
+                                                themeColor('secondary')
                                         }}
                                         textInputStyle={{
                                             color: themeColor('text'),
-                                            fontSize: 16
+                                            fontSize: 18,
+                                            fontFamily: 'PPNeueMontreal-Medium'
                                         }}
                                         keyboardType="number-pad"
                                     />
@@ -582,14 +571,11 @@ export default class CashuLockSettings extends React.Component<
                                             backgroundColor:
                                                 themeColor('secondary'),
                                             height: 48,
-                                            borderRadius: 8,
+                                            borderRadius: 12,
                                             paddingHorizontal: 15,
                                             flexDirection: 'row',
                                             alignItems: 'center',
-                                            justifyContent: 'space-between',
-                                            borderWidth: 1,
-                                            borderColor:
-                                                'rgba(255, 255, 255, 0.1)'
+                                            justifyContent: 'space-between'
                                         }}
                                         onPress={() => {
                                             this.setState({
@@ -597,11 +583,12 @@ export default class CashuLockSettings extends React.Component<
                                                     !this.state.showUnitDropdown
                                             });
                                         }}
+                                        activeOpacity={0.7}
                                     >
                                         <Text
                                             style={{
                                                 color: themeColor('text'),
-                                                fontSize: 16,
+                                                fontSize: 18,
                                                 fontFamily:
                                                     'PPNeueMontreal-Medium',
                                                 textTransform: 'capitalize'
@@ -611,8 +598,16 @@ export default class CashuLockSettings extends React.Component<
                                         </Text>
                                         <Text
                                             style={{
-                                                fontSize: 14,
-                                                color: themeColor('text')
+                                                fontSize: 16,
+                                                color: themeColor('text'),
+                                                transform: [
+                                                    {
+                                                        rotate: this.state
+                                                            .showUnitDropdown
+                                                            ? '180deg'
+                                                            : '0deg'
+                                                    }
+                                                ]
                                             }}
                                         >
                                             ▼
@@ -628,33 +623,28 @@ export default class CashuLockSettings extends React.Component<
                                                 right: 0,
                                                 backgroundColor:
                                                     themeColor('secondary'),
-                                                borderRadius: 8,
-                                                zIndex: 10,
+                                                borderRadius: 12,
+                                                zIndex: 999,
                                                 shadowColor: '#000',
                                                 shadowOffset: {
                                                     width: 0,
-                                                    height: 2
+                                                    height: 4
                                                 },
-                                                shadowOpacity: 0.1,
-                                                shadowRadius: 3,
-                                                elevation: 5,
-                                                borderWidth: 1,
-                                                borderColor:
-                                                    'rgba(255, 255, 255, 0.1)'
+                                                shadowOpacity: 0.2,
+                                                shadowRadius: 6,
+                                                elevation: 8,
+                                                overflow: 'hidden'
                                             }}
                                         >
-                                            {timeUnits.map((unit) => (
+                                            {timeUnits.map((unit, index) => (
                                                 <TouchableOpacity
                                                     key={unit}
                                                     style={{
-                                                        paddingVertical: 12,
+                                                        paddingVertical: 14,
                                                         paddingHorizontal: 15,
                                                         borderBottomWidth:
-                                                            unit !==
-                                                            timeUnits[
-                                                                timeUnits.length -
-                                                                    1
-                                                            ]
+                                                            index !==
+                                                            timeUnits.length - 1
                                                                 ? 1
                                                                 : 0,
                                                         borderBottomColor:
@@ -662,7 +652,9 @@ export default class CashuLockSettings extends React.Component<
                                                         backgroundColor:
                                                             customDurationUnit ===
                                                             unit
-                                                                ? '#fff'
+                                                                ? themeColor(
+                                                                      'text'
+                                                                  )
                                                                 : 'transparent'
                                                     }}
                                                     onPress={() => {
@@ -673,17 +665,20 @@ export default class CashuLockSettings extends React.Component<
                                                                 false
                                                         });
                                                     }}
+                                                    activeOpacity={0.7}
                                                 >
                                                     <Text
                                                         style={{
                                                             color:
                                                                 customDurationUnit ===
                                                                 unit
-                                                                    ? '#000'
+                                                                    ? themeColor(
+                                                                          'secondary'
+                                                                      )
                                                                     : themeColor(
                                                                           'text'
                                                                       ),
-                                                            fontSize: 16,
+                                                            fontSize: 18,
                                                             fontFamily:
                                                                 'PPNeueMontreal-Medium',
                                                             textTransform:
@@ -704,9 +699,10 @@ export default class CashuLockSettings extends React.Component<
                                     <Text
                                         style={{
                                             fontFamily: 'PPNeueMontreal-Medium',
-                                            fontSize: 14,
+                                            fontSize: 16,
                                             color: themeColor('success'),
-                                            marginTop: 8
+                                            marginTop: 12,
+                                            textAlign: 'center'
                                         }}
                                     >
                                         {`${customDurationValue} ${
@@ -717,7 +713,7 @@ export default class CashuLockSettings extends React.Component<
                                     </Text>
                                 )}
 
-                            {duration === 'forever' && (
+                            {duration === 'Forever' && (
                                 <Text
                                     style={{
                                         fontFamily: 'PPNeueMontreal-Medium',
@@ -746,72 +742,57 @@ export default class CashuLockSettings extends React.Component<
                         </View>
                     )}
 
-                    <View
-                        style={{
-                            flexDirection: 'row',
-                            marginTop: 'auto',
-                            marginBottom: 20,
-                            gap: 12
-                        }}
-                    >
-                        <TouchableOpacity
-                            onPress={() => navigation.goBack()}
-                            style={{
-                                flex: 1,
-                                height: 48,
-                                borderRadius: 8,
-                                backgroundColor: themeColor('secondary'),
-                                justifyContent: 'center',
-                                alignItems: 'center'
-                            }}
-                            activeOpacity={0.7}
-                        >
-                            <Text
-                                style={{
-                                    color: themeColor('text'),
-                                    fontSize: 16,
-                                    fontWeight: '500',
-                                    fontFamily: 'PPNeueMontreal-Medium'
-                                }}
-                            >
-                                {localeString('cashu.cancel')}
-                            </Text>
-                        </TouchableOpacity>
+                    <View style={styles.bottomButtonContainer}>
+                        <Button
+                            onPress={() => {
+                                const navigationParams: {
+                                    lockedPubkey: string;
+                                    duration: string;
+                                    fromLockSettings: boolean;
+                                    memo: string;
+                                    value: string;
+                                    satAmount: string | number;
+                                    account: string;
+                                } = {
+                                    lockedPubkey: '',
+                                    duration: '',
+                                    fromLockSettings: true,
+                                    memo: this.state.memo,
+                                    value: this.state.value,
+                                    satAmount: this.state.satAmount,
+                                    account: this.state.account
+                                };
 
-                        <TouchableOpacity
-                            onPress={this.handleSave}
-                            style={{
-                                flex: 1,
-                                height: 48,
-                                borderRadius: 8,
-                                backgroundColor: !isFormValid
-                                    ? themeColor('secondary')
-                                    : themeColor('text'),
-                                justifyContent: 'center',
-                                alignItems: 'center',
-                                borderWidth: 1,
-                                borderColor: themeColor('secondary')
+                                navigation.navigate(
+                                    'MintToken',
+                                    navigationParams
+                                );
                             }}
-                            activeOpacity={0.7}
+                            containerStyle={styles.bottomButton}
+                            buttonStyle={styles.cancelButton}
+                            titleStyle={styles.cancelButtonText}
+                            title={localeString('cashu.cancel')}
+                        />
+
+                        <Button
+                            onPress={this.handleSave}
+                            containerStyle={styles.bottomButton}
+                            buttonStyle={[
+                                styles.lockButton,
+                                !isFormValid && styles.lockButtonDisabled
+                            ]}
+                            titleStyle={{
+                                ...styles.lockButtonText,
+                                ...(!isFormValid &&
+                                    styles.lockButtonTextDisabled)
+                            }}
                             disabled={!isFormValid}
-                        >
-                            <Text
-                                style={{
-                                    color: !isFormValid
-                                        ? 'rgba(0, 0, 0, 0.3)'
-                                        : themeColor('secondary'),
-                                    fontSize: 16,
-                                    fontWeight: '500',
-                                    fontFamily: 'PPNeueMontreal-Medium'
-                                }}
-                            >
-                                {localeString('cashu.lock')}
-                            </Text>
-                        </TouchableOpacity>
+                            title={localeString('cashu.lock')}
+                        />
                     </View>
 
-                    {pubkey &&
-                        AddressUtils.isValidLightningPubKey(pubkey) &&
+                    {lockedPubkey &&
+                        AddressUtils.isValidLightningPubKey(lockedPubkey) &&
                         !duration &&
                         !showCustomDuration && (
                             <Text
@@ -838,5 +819,50 @@ const styles = StyleSheet.create({
     },
     text: {
         fontFamily: 'PPNeueMontreal-Book'
+    },
+    pasteButton: {
+        backgroundColor: themeColor('text'),
+        borderRadius: 8,
+        height: 48,
+        marginBottom: 24
+    },
+    pasteButtonText: {
+        color: themeColor('secondary'),
+        fontSize: 15,
+        fontFamily: 'PPNeueMontreal-Medium'
+    },
+    bottomButtonContainer: {
+        marginTop: 'auto',
+        marginBottom: 20,
+        gap: 12
+    },
+    bottomButton: {
+        flex: 1
+    },
+    cancelButton: {
+        height: 48,
+        borderRadius: 8,
+        backgroundColor: themeColor('secondary')
+    },
+    cancelButtonText: {
+        color: themeColor('text'),
+        fontSize: 16,
+        fontFamily: 'PPNeueMontreal-Medium'
+    },
+    lockButton: {
+        height: 48,
+        borderRadius: 8,
+        backgroundColor: themeColor('text')
+    },
+    lockButtonDisabled: {
+        backgroundColor: themeColor('secondary')
+    },
+    lockButtonText: {
+        color: themeColor('secondary'),
+        fontSize: 16,
+        fontFamily: 'PPNeueMontreal-Medium'
+    },
+    lockButtonTextDisabled: {
+        color: 'rgba(0, 0, 0, 0.3)'
     }
 });

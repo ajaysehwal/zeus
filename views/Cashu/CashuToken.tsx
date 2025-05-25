@@ -78,7 +78,6 @@ export default class CashuTokenView extends React.Component<
                 await initializeWallet(mint, true);
             }
 
-            // Set up a periodic check every 5 seconds
             const checkInterval = setInterval(async () => {
                 const isSpent = await checkTokenSpent(decoded);
 
@@ -238,25 +237,6 @@ export default class CashuTokenView extends React.Component<
                                         : 'views.Invoice.settleDate'
                                 )}
                                 value={getDisplayTime}
-                                sensitive
-                            />
-                        )}
-
-                        {/* Display lock information if present */}
-                        {decoded.lockedPubkey && (
-                            <KeyValue
-                                keyValue={localeString('cashu.lockedToKey')}
-                                value={decoded.lockedPubkey}
-                                sensitive
-                            />
-                        )}
-
-                        {decoded.lockedDuration && (
-                            <KeyValue
-                                keyValue={localeString(
-                                    'cashu.lockedForDuration'
-                                )}
-                                value={decoded.lockedDuration}
                                 sensitive
                             />
                         )}
