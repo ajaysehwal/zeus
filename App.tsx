@@ -234,6 +234,7 @@ import Menu from './views/Menu';
 // Tools
 import Tools from './views/Tools';
 import ActivityExport from './views/Tools/ActivityExport';
+import WatchTowers from './views/Tools/WatchTowers/index';
 import BumpFee from './views/Tools/BumpFee';
 import CurrencyConverter from './views/Tools/CurrencyConverter';
 import DeveloperTools from './views/Tools/DeveloperTools';
@@ -246,6 +247,8 @@ import CashuTools from './views/Tools/CashuTools';
 import NodeConfigExportImport from './views/Tools/NodeConfigExportImport';
 
 import { isLightTheme, themeColor } from './utils/ThemeUtils';
+import AddWatchtower from './views/Tools/WatchTowers/AddWatchTower';
+import WatchTowerDetails from './views/Tools/WatchTowers/WatchTowerDetails';
 
 export default class App extends React.PureComponent {
     private backPressListenerSubscription: NativeEventSubscription;
@@ -1010,6 +1013,22 @@ export default class App extends React.PureComponent {
                                                         name="OnChainAddresses" // @ts-ignore:next-line
                                                         component={
                                                             OnChainAddresses
+                                                        }
+                                                    />
+                                                    <Stack.Screen
+                                                        name="WatchTowers" // @ts-ignore:next-line
+                                                        component={WatchTowers}
+                                                    />
+                                                    <Stack.Screen
+                                                        name="WatchTowerDetails" // @ts-ignore:next-line
+                                                        component={
+                                                            WatchTowerDetails
+                                                        }
+                                                    />
+                                                    <Stack.Screen
+                                                        name="AddWatchtower" // @ts-ignore:next-line
+                                                        component={
+                                                            AddWatchtower
                                                         }
                                                     />
                                                     <Stack.Screen

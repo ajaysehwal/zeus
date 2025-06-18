@@ -134,6 +134,7 @@ export default class LndHub extends LND {
         );
     };
     supportsKeysend = () => false;
+    supportsWatchtowers = () => false;
     supportsChannelManagement = () => false;
     supportsPendingChannels = () => false;
     supportsClosedChannels = () => false;
