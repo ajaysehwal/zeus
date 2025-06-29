@@ -14,13 +14,13 @@ import { SearchBar, Icon, Divider } from 'react-native-elements';
 import Header from '../../../components/Header';
 import LoadingIndicator from '../../../components/LoadingIndicator';
 import Screen from '../../../components/Screen';
-import Button from '../../../components/Button';
 
 import SettingsStore from '../../../stores/SettingsStore';
 import BackendUtils from '../../../utils/BackendUtils';
 
 import { localeString } from '../../../utils/LocaleUtils';
 import { themeColor } from '../../../utils/ThemeUtils';
+import Base64Utils from '../../../utils/Base64Utils';
 
 interface WatchtowersProps {
     navigation: StackNavigationProp<any, any>;
@@ -69,8 +69,19 @@ export default class WatchTowers extends React.Component<
         error: ''
     };
 
-    async UNSAFE_componentWillMount() {
+    private focusListener: any;
+
+    async componentDidMount() {
         await this.loadWatchtowers();
+        this.focusListener = this.props.navigation.addListener('focus', () => {
+            this.loadWatchtowers();
+        });
+    }
+
+    componentWillUnmount() {
+        if (this.focusListener) {
+            this.focusListener();
+        }
     }
 
     loadWatchtowers = async () => {
@@ -79,17 +90,25 @@ export default class WatchTowers extends React.Component<
         try {
             const response: WatchtowerListResponse =
                 await BackendUtils.listWatchtowers();
-
             this.setState({
                 watchtowers: response.towers || [],
                 loading: false
             });
         } catch (error: any) {
-            console.error('Error loading watchtowers:', error);
+            let errorMessage = error.message || 'Failed to load watchtowers';
+            if (
+                errorMessage.includes('watchtower client not active') ||
+                (error.code === 2 &&
+                    errorMessage.includes('watchtower client not active'))
+            ) {
+                errorMessage = localeString(
+                    'views.Tools.watchtowers.clientNotActive'
+                );
+            }
             this.setState({
                 watchtowers: [],
                 loading: false,
-                error: error.message || 'Failed to load watchtowers'
+                error: errorMessage
             });
         }
     };
@@ -136,7 +155,7 @@ export default class WatchTowers extends React.Component<
                     <Icon
                         name="radio-tower"
                         type="octicon"
-                        size={18}
+                        size={30}
                         color={
                             item.active_session_candidate
                                 ? themeColor('highlight')
@@ -153,8 +172,20 @@ export default class WatchTowers extends React.Component<
                             numberOfLines={1}
                             ellipsizeMode="middle"
                         >
-                            {item.pubkey}
+                            {Base64Utils.base64ToHex(item.pubkey)}
                         </Text>
+                        {item.addresses && item.addresses.length > 0 && (
+                            <Text
+                                style={[
+                                    styles.watchtowerAddress,
+                                    { color: themeColor('secondaryText') }
+                                ]}
+                                numberOfLines={1}
+                                ellipsizeMode="tail"
+                            >
+                                {item.addresses[0]}
+                            </Text>
+                        )}
                     </View>
                 </View>
 
@@ -173,49 +204,32 @@ export default class WatchTowers extends React.Component<
     renderEmptyState = () => {
         const { searchQuery, error } = this.state;
 
-        if (error) {
-            return (
-                <View style={styles.emptyContainer}>
-                    <Icon
-                        name="alert-triangle"
-                        type="feather"
-                        size={50}
-                        color={themeColor('error')}
-                        containerStyle={styles.emptyIcon}
-                    />
-                    <Text
-                        style={[
-                            styles.emptyText,
-                            { color: themeColor('error') }
-                        ]}
-                    >
-                        {error}
-                    </Text>
-                    <Button
-                        title={localeString('general.retry')}
-                        onPress={this.loadWatchtowers}
-                        containerStyle={{ marginTop: 10 }}
-                    />
-                </View>
-            );
-        }
-
         return (
             <View style={styles.emptyContainer}>
                 <Icon
                     name="radio-tower"
                     type="octicon"
                     size={50}
-                    color={themeColor('secondaryText')}
+                    color={
+                        error
+                            ? themeColor('error')
+                            : themeColor('secondaryText')
+                    }
                     containerStyle={styles.emptyIcon}
                 />
                 <Text
                     style={[
                         styles.emptyText,
-                        { color: themeColor('secondaryText') }
+                        {
+                            color: error
+                                ? themeColor('error')
+                                : themeColor('secondaryText')
+                        }
                     ]}
                 >
-                    {searchQuery.length > 0
+                    {error
+                        ? error
+                        : searchQuery.length > 0
                         ? localeString('views.Settings.Contacts.noAddress')
                         : localeString('views.Tools.watchtowers.noWatchtowers')}
                 </Text>
@@ -225,7 +239,7 @@ export default class WatchTowers extends React.Component<
 
     render() {
         const { navigation } = this.props;
-        const { loading, searchQuery, refreshing } = this.state;
+        const { loading, searchQuery, refreshing, error } = this.state;
         const filteredWatchtowers = this.getFilteredWatchtowers();
 
         return (
@@ -240,40 +254,58 @@ export default class WatchTowers extends React.Component<
                         }
                     }}
                     rightComponent={
-                        loading ? <LoadingIndicator size={30} /> : undefined
+                        loading ? (
+                            <LoadingIndicator size={30} />
+                        ) : !error ? (
+                            <TouchableOpacity
+                                onPress={() =>
+                                    navigation.navigate('AddWatchtower')
+                                }
+                            >
+                                <Icon
+                                    name="plus"
+                                    type="feather"
+                                    size={40}
+                                    color={themeColor('text')}
+                                />
+                            </TouchableOpacity>
+                        ) : undefined
                     }
                     navigation={navigation}
                 />
                 <View style={styles.container}>
-                    <SearchBar
-                        placeholder={localeString('general.search')}
-                        // @ts-ignore:next-line
-                        onChangeText={this.handleSearch}
-                        value={searchQuery}
-                        inputStyle={{
-                            color: themeColor('text'),
-                            fontFamily: 'PPNeueMontreal-Book'
-                        }}
-                        placeholderTextColor={themeColor('secondaryText')}
-                        containerStyle={{
-                            backgroundColor: 'transparent',
-                            borderTopWidth: 0,
-                            borderBottomWidth: 0,
-                            paddingHorizontal: 0,
-                            marginBottom: 10
-                        }}
-                        inputContainerStyle={{
-                            borderRadius: 15,
-                            backgroundColor: themeColor('secondary')
-                        }}
-                        // @ts-ignore:next-line
-                        searchIcon={{
-                            importantForAccessibility: 'no-hide-descendants',
-                            accessibilityElementsHidden: true
-                        }}
-                    />
+                    {!error && (
+                        <SearchBar
+                            placeholder={localeString('general.search')}
+                            // @ts-ignore:next-line
+                            onChangeText={this.handleSearch}
+                            value={searchQuery}
+                            inputStyle={{
+                                color: themeColor('text'),
+                                fontFamily: 'PPNeueMontreal-Book'
+                            }}
+                            placeholderTextColor={themeColor('secondaryText')}
+                            containerStyle={{
+                                backgroundColor: 'transparent',
+                                borderTopWidth: 0,
+                                borderBottomWidth: 0,
+                                paddingHorizontal: 0,
+                                marginBottom: 10
+                            }}
+                            inputContainerStyle={{
+                                borderRadius: 15,
+                                backgroundColor: themeColor('secondary')
+                            }}
+                            // @ts-ignore:next-line
+                            searchIcon={{
+                                importantForAccessibility:
+                                    'no-hide-descendants',
+                                accessibilityElementsHidden: true
+                            }}
+                        />
+                    )}
 
-                    {filteredWatchtowers.length > 0 ? (
+                    {filteredWatchtowers.length > 0 && !this.state.error ? (
                         <FlatList
                             data={filteredWatchtowers}
                             renderItem={this.renderItem}
@@ -302,18 +334,6 @@ export default class WatchTowers extends React.Component<
                     ) : (
                         this.renderEmptyState()
                     )}
-
-                    <Button
-                        title={localeString('views.Tools.addWatchtower')}
-                        onPress={() => navigation.navigate('AddWatchtower')}
-                        containerStyle={styles.addButton}
-                        icon={{
-                            name: 'plus',
-                            type: 'feather',
-                            size: 16,
-                            color: 'white'
-                        }}
-                    />
                 </View>
             </Screen>
         );
@@ -385,8 +405,5 @@ const styles = StyleSheet.create({
     },
     divider: {
         marginHorizontal: 16
-    },
-    addButton: {
-        marginTop: 15
     }
 });

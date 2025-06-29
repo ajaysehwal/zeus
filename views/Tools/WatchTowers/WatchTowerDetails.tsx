@@ -13,6 +13,7 @@ import Screen from '../../../components/Screen';
 import BackendUtils from '../../../utils/BackendUtils';
 import { localeString } from '../../../utils/LocaleUtils';
 import { themeColor } from '../../../utils/ThemeUtils';
+import Base64Utils from '../../../utils/Base64Utils';
 
 interface WatchTowerDetailsProps {
     navigation: StackNavigationProp<any, any>;
@@ -39,6 +40,7 @@ interface WatchTowerDetailsState {
     watchtowerInfo: any | null;
     confirmDelete: boolean;
     confirmDeactivate: boolean;
+    confirmActivate: boolean;
 }
 
 @inject()
@@ -52,7 +54,8 @@ export default class WatchTowerDetails extends React.Component<
         error: '',
         watchtowerInfo: null,
         confirmDelete: false,
-        confirmDeactivate: false
+        confirmDeactivate: false,
+        confirmActivate: false
     };
 
     async componentDidMount() {
@@ -62,9 +65,7 @@ export default class WatchTowerDetails extends React.Component<
     loadWatchtowerInfo = async () => {
         const { route } = this.props;
         const { watchtower } = route.params;
-
         this.setState({ loading: true, error: '' });
-
         try {
             const info = await BackendUtils.getWatchtowerInfo(
                 watchtower.pubkey
@@ -74,7 +75,7 @@ export default class WatchTowerDetails extends React.Component<
                 loading: false
             });
         } catch (error: any) {
-            console.error('Error loading watchtower info:', error);
+            console.error('error', error);
             this.setState({
                 watchtowerInfo: watchtower,
                 loading: false,
@@ -91,7 +92,6 @@ export default class WatchTowerDetails extends React.Component<
             this.setState({ confirmDeactivate: true });
             return;
         }
-
         this.setState({ loading: true, error: '', confirmDeactivate: false });
 
         try {
@@ -106,25 +106,44 @@ export default class WatchTowerDetails extends React.Component<
         }
     };
 
-    deleteWatchtower = async () => {
+    activateWatchtower = async () => {
         const { route, navigation } = this.props;
         const { watchtower } = route.params;
 
+        if (!this.state.confirmActivate) {
+            this.setState({ confirmActivate: true });
+            return;
+        }
+        this.setState({ loading: true, error: '', confirmActivate: false });
+
+        try {
+            await BackendUtils.activateWatchtower({
+                pubkey: watchtower.pubkey,
+                address: watchtower.addresses[0]
+            });
+            navigation.goBack();
+        } catch (error: any) {
+            console.error('Error activating watchtower:', error);
+            this.setState({
+                loading: false,
+                error: error.message || 'Failed to activate watchtower'
+            });
+        }
+    };
+
+    deleteWatchtower = async () => {
+        const { route, navigation } = this.props;
+        const { watchtower } = route.params;
         if (!this.state.confirmDelete) {
             this.setState({ confirmDelete: true });
             return;
         }
-
         this.setState({ loading: true, error: '', confirmDelete: false });
-
         try {
-            await BackendUtils.removeWatchtower(
-                watchtower.pubkey,
-                watchtower.addresses[0]
-            );
+            await BackendUtils.removeWatchtower(watchtower.pubkey);
             navigation.goBack();
         } catch (error: any) {
-            console.error('Error deleting watchtower:', error);
+            console.log('error', error);
             this.setState({
                 loading: false,
                 error: error.message || 'Failed to delete watchtower'
@@ -136,8 +155,8 @@ export default class WatchTowerDetails extends React.Component<
         const { navigation, route } = this.props;
         const { loading, watchtowerInfo } = this.state;
         const { watchtower } = route.params;
-
         const displayData = watchtowerInfo || watchtower;
+        const isActive = displayData.active_session_candidate;
 
         return (
             <Screen>
@@ -156,146 +175,169 @@ export default class WatchTowerDetails extends React.Component<
                     navigation={navigation}
                 />
 
-                <ScrollView style={styles.container}>
-                    {/* Status Indicator */}
-                    <View style={styles.statusContainer}>
-                        <View style={styles.statusContent}>
-                            <View
-                                style={[
-                                    styles.statusIndicator,
-                                    {
-                                        backgroundColor:
-                                            displayData.active_session_candidate
-                                                ? themeColor('success')
-                                                : themeColor('error')
-                                    }
-                                ]}
-                            />
-                            <Text
-                                style={[
-                                    styles.statusText,
-                                    { color: themeColor('text') }
-                                ]}
-                            >
-                                {displayData.active_session_candidate
-                                    ? localeString(
-                                          'views.Tools.watchtowers.active'
-                                      )
-                                    : localeString(
-                                          'views.Tools.watchtowers.inactive'
-                                      )}
-                            </Text>
-                        </View>
-                    </View>
-
-                    {/* Watchtower Information */}
-                    <View style={styles.infoSection}>
-                        <KeyValue
-                            keyValue={localeString(
-                                'views.Tools.watchtowers.pubkey'
-                            )}
-                            value={displayData.pubkey}
-                            sensitive
-                        />
-
-                        <KeyValue
-                            keyValue={localeString(
-                                'views.Tools.watchtowers.sessions'
-                            )}
-                            value={`${displayData.num_sessions || 0}`}
-                            color={
-                                displayData.num_sessions > 0
-                                    ? themeColor('success')
-                                    : themeColor('secondaryText')
-                            }
-                        />
-
-                        <KeyValue
-                            keyValue={localeString(
-                                'views.Tools.watchtowers.addresses'
-                            )}
-                            value={displayData.addresses.join('\n')}
-                            sensitive
-                        />
-
-                        <KeyValue
-                            keyValue={localeString(
-                                'views.Tools.watchtowers.activeCandidate'
-                            )}
-                            value={
-                                displayData.active_session_candidate
-                                    ? localeString('general.true')
-                                    : localeString('general.false')
-                            }
-                            color={
-                                displayData.active_session_candidate
-                                    ? themeColor('success')
-                                    : themeColor('error')
-                            }
-                        />
-                    </View>
-
-                    {/* Session Info - Only show if there are sessions */}
-                    {displayData.session_info &&
-                        displayData.session_info.length > 0 &&
-                        displayData.num_sessions > 0 && (
-                            <View style={styles.sessionSection}>
-                                <Text
-                                    style={[
-                                        styles.sectionTitle,
-                                        { color: themeColor('text') }
-                                    ]}
-                                >
-                                    {localeString(
-                                        'views.Tools.watchtowers.sessionInfo'
-                                    )}
-                                </Text>
-                                {displayData.session_info.map(
-                                    (session: any, index: number) => (
-                                        <View
-                                            key={index}
-                                            style={styles.sessionItem}
-                                        >
-                                            <KeyValue
-                                                keyValue={localeString(
-                                                    'views.Tools.watchtowers.policyType'
-                                                )}
-                                                value={
-                                                    session.policy_type || 'N/A'
-                                                }
-                                            />
-                                            <KeyValue
-                                                keyValue={localeString(
-                                                    'views.Tools.watchtowers.numSessions'
-                                                )}
-                                                value={`${
-                                                    session.num_sessions || 0
-                                                }`}
-                                            />
-                                        </View>
-                                    )
+                <View style={styles.mainContainer}>
+                    <ScrollView
+                        style={styles.scrollContainer}
+                        contentContainerStyle={styles.scrollContent}
+                    >
+                        <View style={styles.infoSection}>
+                            <KeyValue
+                                keyValue={localeString(
+                                    'views.Transaction.status'
                                 )}
-                            </View>
-                        )}
+                                value={
+                                    displayData.active_session_candidate
+                                        ? localeString(
+                                              'views.Tools.watchtowers.active'
+                                          )
+                                        : localeString(
+                                              'views.Tools.watchtowers.inactive'
+                                          )
+                                }
+                                valueIndicatorColor={
+                                    displayData.active_session_candidate
+                                        ? themeColor('success')
+                                        : themeColor('error')
+                                }
+                                sensitive
+                            />
+                            <KeyValue
+                                keyValue={localeString(
+                                    'views.Tools.watchtowers.pubkey'
+                                )}
+                                value={Base64Utils.base64ToHex(
+                                    displayData.pubkey
+                                )}
+                                sensitive
+                            />
+
+                            <KeyValue
+                                keyValue={localeString(
+                                    'views.Tools.watchtowers.sessions'
+                                )}
+                                value={`${displayData.num_sessions || 0}`}
+                                color={
+                                    displayData.num_sessions > 0
+                                        ? themeColor('success')
+                                        : themeColor('secondaryText')
+                                }
+                            />
+
+                            <KeyValue
+                                keyValue={localeString(
+                                    'views.Tools.watchtowers.addresses'
+                                )}
+                                value={displayData.addresses.join('\n')}
+                                sensitive
+                            />
+
+                            <KeyValue
+                                keyValue={localeString(
+                                    'views.Tools.watchtowers.activeCandidate'
+                                )}
+                                value={
+                                    displayData.active_session_candidate
+                                        ? localeString('general.true')
+                                        : localeString('general.false')
+                                }
+                                color={
+                                    displayData.active_session_candidate
+                                        ? themeColor('success')
+                                        : themeColor('error')
+                                }
+                            />
+                        </View>
+
+                        {/* Session Info - Only show if there are sessions */}
+                        {displayData.session_info &&
+                            displayData.session_info.length > 0 &&
+                            displayData.num_sessions > 0 && (
+                                <View style={styles.sessionSection}>
+                                    <Text
+                                        style={[
+                                            styles.sectionTitle,
+                                            { color: themeColor('text') }
+                                        ]}
+                                    >
+                                        {localeString(
+                                            'views.Tools.watchtowers.sessionInfo'
+                                        )}
+                                    </Text>
+                                    {displayData.session_info.map(
+                                        (session: any, index: number) => (
+                                            <View
+                                                key={index}
+                                                style={styles.sessionItem}
+                                            >
+                                                <KeyValue
+                                                    keyValue={localeString(
+                                                        'views.Tools.watchtowers.policyType'
+                                                    )}
+                                                    value={
+                                                        session.policy_type ||
+                                                        'N/A'
+                                                    }
+                                                />
+                                                <KeyValue
+                                                    keyValue={localeString(
+                                                        'views.Tools.watchtowers.numSessions'
+                                                    )}
+                                                    value={`${
+                                                        session.num_sessions ||
+                                                        0
+                                                    }`}
+                                                />
+                                            </View>
+                                        )
+                                    )}
+                                </View>
+                            )}
+                    </ScrollView>
 
                     <View style={styles.buttonContainer}>
-                        <Button
-                            title={
-                                this.state.confirmDeactivate
-                                    ? localeString(
-                                          'views.Settings.AddEditNode.tapToConfirm'
-                                      )
-                                    : localeString(
-                                          'views.Tools.watchtowers.deactivate'
-                                      )
-                            }
-                            onPress={this.deactivateWatchtower}
-                            disabled={loading}
-                            containerStyle={styles.button}
-                            buttonStyle={{
-                                backgroundColor: themeColor('warning')
-                            }}
-                        />
+                        {isActive ? (
+                            <Button
+                                title={
+                                    this.state.confirmDeactivate
+                                        ? localeString(
+                                              'views.Settings.AddEditNode.tapToConfirm'
+                                          )
+                                        : localeString(
+                                              'views.Tools.watchtowers.deactivate'
+                                          )
+                                }
+                                onPress={this.deactivateWatchtower}
+                                disabled={loading}
+                                containerStyle={styles.button}
+                                buttonStyle={{
+                                    backgroundColor: themeColor('secondary'),
+                                    borderRadius: 8
+                                }}
+                                titleStyle={{
+                                    color: themeColor('text')
+                                }}
+                            />
+                        ) : (
+                            <Button
+                                title={
+                                    this.state.confirmActivate
+                                        ? localeString(
+                                              'views.Settings.AddEditNode.tapToConfirm'
+                                          )
+                                        : localeString('general.activate')
+                                }
+                                onPress={this.activateWatchtower}
+                                disabled={loading}
+                                containerStyle={styles.button}
+                                buttonStyle={{
+                                    backgroundColor: themeColor('secondary'),
+                                    borderRadius: 8
+                                }}
+                                titleStyle={{
+                                    color: themeColor('success')
+                                }}
+                            />
+                        )}
 
                         <Button
                             title={
@@ -314,13 +356,24 @@ export default class WatchTowerDetails extends React.Component<
                             warning
                         />
                     </View>
-                </ScrollView>
+                </View>
             </Screen>
         );
     }
 }
 
 const styles = StyleSheet.create({
+    mainContainer: {
+        flex: 1
+    },
+    scrollContainer: {
+        flex: 1
+    },
+    scrollContent: {
+        paddingLeft: 20,
+        paddingRight: 20,
+        paddingBottom: 20
+    },
     container: {
         flex: 1,
         paddingLeft: 20,
@@ -330,8 +383,7 @@ const styles = StyleSheet.create({
         alignItems: 'center',
         marginBottom: 24,
         padding: 16,
-        borderRadius: 8,
-        backgroundColor: 'rgba(255, 255, 255, 0.05)'
+        borderRadius: 8
     },
     statusContent: {
         flexDirection: 'row',
@@ -367,9 +419,9 @@ const styles = StyleSheet.create({
         backgroundColor: 'rgba(255, 255, 255, 0.03)'
     },
     buttonContainer: {
-        marginTop: 20,
-        gap: 12,
-        marginBottom: 30
+        padding: 20,
+        paddingTop: 10,
+        gap: 12
     },
     button: {
         marginHorizontal: 0

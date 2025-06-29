@@ -733,9 +733,7 @@ export default class LND {
         const route = queryParams
             ? `/v2/watchtower/client?${queryParams}`
             : '/v2/watchtower/client';
-        const result = this.getRequest(route);
-        console.log('result--lnd', result);
-        return result;
+        return this.getRequest(route);
     };
 
     addWatchtower = (data: { pubkey: string; address: string }) => {
@@ -745,12 +743,9 @@ export default class LND {
         });
     };
 
-    removeWatchtower = (pubkey: string, address?: string) => {
-        const route = address
-            ? `/v2/watchtower/client/${Base64Utils.hexToBase64(
-                  pubkey
-              )}?address=${address}`
-            : `/v2/watchtower/client/${Base64Utils.hexToBase64(pubkey)}`;
+    removeWatchtower = (pubkey: string) => {
+        const pubkeyBase64Url = Base64Utils.base64ToBase64Url(pubkey);
+        const route = `/v2/watchtower/client/${pubkeyBase64Url}`;
         return this.deleteRequest(route);
     };
 
@@ -761,6 +756,7 @@ export default class LND {
             exclude_exhausted_sessions?: boolean;
         }
     ) => {
+        const pubkeyBase64Url = Base64Utils.base64ToBase64Url(pubkey);
         const queryParams = params
             ? Object.keys(params)
                   .filter(
@@ -770,20 +766,27 @@ export default class LND {
                   .join('&')
             : '';
         const route = queryParams
-            ? `/v2/watchtower/client/info/${Base64Utils.hexToBase64(
-                  pubkey
-              )}?${queryParams}`
-            : `/v2/watchtower/client/info/${Base64Utils.hexToBase64(pubkey)}`;
+            ? `/v2/watchtower/client/info/${pubkeyBase64Url}?${queryParams}`
+            : `/v2/watchtower/client/info/${pubkeyBase64Url}`;
         return this.getRequest(route);
     };
 
-    deactivateWatchtower = (pubkey: string) =>
-        this.postRequest(
-            `/v2/watchtower/client/tower/deactivate/${Base64Utils.hexToBase64(
-                pubkey
-            )}`,
+    deactivateWatchtower = (pubkey: string) => {
+        const pubkeyBase64Url = Base64Utils.base64ToBase64Url(pubkey);
+        return this.postRequest(
+            `/v2/watchtower/client/tower/deactivate/${pubkeyBase64Url}`,
             {}
         );
+    };
+
+    activateWatchtower = (data: { pubkey: string; address: string }) => {
+        // Convert base64 pubkey to hex for addWatchtower method
+        const pubkeyHex = Base64Utils.base64ToHex(data.pubkey);
+        return this.addWatchtower({
+            pubkey: pubkeyHex,
+            address: data.address
+        });
+    };
 
     getWatchtowerStats = () => this.getRequest('/v2/watchtower/client/stats');
 

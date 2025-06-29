@@ -127,6 +127,8 @@ class BackendUtils {
         this.call('getWatchtowerInfo', args);
     deactivateWatchtower = (...args: any[]) =>
         this.call('deactivateWatchtower', args);
+    activateWatchtower = (...args: any[]) =>
+        this.call('activateWatchtower', args);
     getWatchtowerStats = (...args: any[]) =>
         this.call('getWatchtowerStats', args);
     getWatchtowerPolicy = (...args: any[]) =>

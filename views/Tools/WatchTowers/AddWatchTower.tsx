@@ -22,7 +22,6 @@ import { localeString } from '../../../utils/LocaleUtils';
 import { themeColor } from '../../../utils/ThemeUtils';
 
 import Scan from '../../../assets/images/SVG/Scan.svg';
-import Base64Utils from '../../../utils/Base64Utils';
 
 interface AddWatchtowerProps {
     navigation: StackNavigationProp<any, any>;
@@ -34,6 +33,8 @@ interface AddWatchtowerState {
     pubkey: string;
     address: string;
     error: string;
+    isPubkeyValid: boolean;
+    isAddressValid: boolean;
 }
 
 @inject('SettingsStore')
@@ -46,29 +47,41 @@ export default class AddWatchtower extends React.Component<
         loading: false,
         pubkey: '',
         address: '',
-        error: ''
+        error: '',
+        isPubkeyValid: true,
+        isAddressValid: true
     };
 
     validateWatchtowerData = (text: string) => {
         const watchtowerRegex = /^([a-fA-F0-9]{66})@([a-zA-Z0-9.-]+):(\d+)$/;
         const match = text.match(watchtowerRegex);
-
         if (match) {
             const [, pubkey, host, port] = match;
             this.setState({
                 pubkey,
                 address: `${host}:${port}`,
-                error: ''
+                error: '',
+                isPubkeyValid: true,
+                isAddressValid: true
             });
             return true;
         }
-
         this.setState({
             error: localeString(
                 'views.Tools.watchtowers.addWatchtower.invalidFormat'
             )
         });
         return false;
+    };
+
+    validatePubkey = (pubkey: string) => {
+        const pubkeyRegex = /^[a-fA-F0-9]{66}$/;
+        return pubkey === '' || pubkeyRegex.test(pubkey);
+    };
+
+    validateAddress = (address: string) => {
+        const addressRegex = /^[a-zA-Z0-9.-]+:\d+$/;
+        return address === '' || addressRegex.test(address);
     };
 
     handleScan = () => {
@@ -78,42 +91,37 @@ export default class AddWatchtower extends React.Component<
     };
 
     addWatchtower = async () => {
-        // const { navigation } = this.props;
-        // const { pubkey, address } = this.state;
+        const { navigation } = this.props;
+        const { pubkey, address } = this.state;
+        this.setState({ error: '' });
 
-        // this.setState({ error: '' });
-
-        // if (!pubkey || pubkey.trim() === '') {
-        //     this.setState({
-        //         error: localeString(
-        //             'views.Tools.watchtowers.addWatchtower.pubkeyRequired'
-        //         )
-        //     });
-        //     return;
-        // }
-
-        // if (!address || address.trim() === '') {
-        //     this.setState({
-        //         error: localeString(
-        //             'views.Tools.watchtowers.addWatchtower.addressRequired'
-        //         )
-        //     });
-        //     return;
-        // }
-
-        // this.setState({ loading: true });
-
-        try {
-            const result = await BackendUtils.addWatchtower({
-                pubkey: Base64Utils.hexToBase64(
-                    '02037375bd0284f3e546246b6251208365d10734db2328cbfac1ac542a4148b285'
-                ),
-                address: 'localhost:8082'
+        if (!pubkey || pubkey.trim() === '') {
+            this.setState({
+                error: localeString(
+                    'views.Tools.watchtowers.addWatchtower.pubkeyRequired'
+                )
             });
-            console.log('result', result);
+            return;
+        }
+
+        if (!address || address.trim() === '') {
+            this.setState({
+                error: localeString(
+                    'views.Tools.watchtowers.addWatchtower.addressRequired'
+                )
+            });
+            return;
+        }
+        this.setState({ loading: true });
+        try {
+            await BackendUtils.addWatchtower({
+                pubkey,
+                address
+            });
             this.setState({ loading: false });
-            // navigation.goBack();
+            navigation.goBack();
         } catch (error: any) {
+            console.log('error', error);
             this.setState({
                 loading: false,
                 error: error.message || localeString('general.unknown_error')
@@ -123,7 +131,14 @@ export default class AddWatchtower extends React.Component<
 
     render() {
         const { navigation } = this.props;
-        const { loading, pubkey, address, error } = this.state;
+        const {
+            loading,
+            pubkey,
+            address,
+            error,
+            isPubkeyValid,
+            isAddressValid
+        } = this.state;
 
         return (
             <Screen>
@@ -176,16 +191,21 @@ export default class AddWatchtower extends React.Component<
                                 styles.input,
                                 {
                                     backgroundColor: themeColor('secondary'),
-                                    color: themeColor('text')
+                                    color: this.state.isPubkeyValid
+                                        ? themeColor('text')
+                                        : '#FF6B6B'
                                 }
                             ]}
                             value={pubkey}
-                            onChangeText={(text) =>
-                                this.setState({ pubkey: text, error: '' })
-                            }
-                            placeholder={localeString(
-                                'views.OpenChannel.nodePubkey'
-                            )}
+                            onChangeText={(text) => {
+                                const isValid = this.validatePubkey(text);
+                                this.setState({
+                                    pubkey: text,
+                                    error: '',
+                                    isPubkeyValid: isValid
+                                });
+                            }}
+                            placeholder={'02abc...'}
                             placeholderTextColor={themeColor('secondaryText')}
                             autoCapitalize="none"
                             autoCorrect={false}
@@ -209,13 +229,20 @@ export default class AddWatchtower extends React.Component<
                                 styles.input,
                                 {
                                     backgroundColor: themeColor('secondary'),
-                                    color: themeColor('text')
+                                    color: this.state.isAddressValid
+                                        ? themeColor('text')
+                                        : '#FF6B6B'
                                 }
                             ]}
                             value={address}
-                            onChangeText={(text) =>
-                                this.setState({ address: text, error: '' })
-                            }
+                            onChangeText={(text) => {
+                                const isValid = this.validateAddress(text);
+                                this.setState({
+                                    address: text,
+                                    error: '',
+                                    isAddressValid: isValid
+                                });
+                            }}
                             placeholder={localeString(
                                 'views.OpenChannel.hostPort'
                             )}
@@ -242,7 +269,13 @@ export default class AddWatchtower extends React.Component<
                     <Button
                         title={localeString('views.Tools.addWatchtower')}
                         onPress={this.addWatchtower}
-                        // disabled={loading || !pubkey.trim() || !address.trim()}
+                        disabled={
+                            loading ||
+                            !pubkey.trim() ||
+                            !address.trim() ||
+                            !isPubkeyValid ||
+                            !isAddressValid
+                        }
                     />
                 </View>
             </Screen>
