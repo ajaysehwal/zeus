@@ -211,6 +211,10 @@ export interface Settings {
     bolt12Address: Bolt12AddressSettings;
     selectNodeOnStartup: boolean;
     ecash: EcashSettings;
+    // NWC Service
+    nwcServiceEnabled: boolean;
+    nwcServiceRelay: string;
+    nwcServicePrivateKey?: string;
 }
 
 export const FIAT_RATES_SOURCE_KEYS = [
@@ -1419,6 +1423,8 @@ export default class SettingsStore {
             automaticallySweep: false,
             sweepThresholdSats: 10000
         },
+        nwcServiceEnabled: false,
+        nwcServiceRelay: 'wss://relay.getalby.com/v1',
         selectNodeOnStartup: false
     };
     @observable public posStatus: string = 'unselected';

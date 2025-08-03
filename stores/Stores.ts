@@ -15,6 +15,7 @@ import LSPStore from './LSPStore';
 import MessageSignStore from './MessageSignStore';
 import ModalStore from './ModalStore';
 import NodeInfoStore from './NodeInfoStore';
+import NostrWalletConnectStore from './NostrWalletConnectStore';
 import NotesStore from './NotesStore';
 import OffersStore from './OffersStore';
 import PaymentsStore from './PaymentsStore';
@@ -84,3 +85,6 @@ export const lightningAddressStore = new LightningAddressStore(
 export const posStore = new PosStore(settingsStore, fiatStore);
 export const inventoryStore = new InventoryStore();
 export const swapStore = new SwapStore(nodeInfoStore, settingsStore);
+export const nostrWalletConnectStore = new NostrWalletConnectStore(
+    settingsStore
+);

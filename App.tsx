@@ -24,6 +24,7 @@ import {
     messageSignStore,
     modalStore,
     nodeInfoStore,
+    nostrWalletConnectStore,
     notesStore,
     offersStore,
     paymentsStore,
@@ -202,6 +203,8 @@ import LSPS7Order from './views/LSPS7/Order';
 
 // Cashu Ecash
 import EcashSettings from './views/Settings/EcashSettings';
+import NostrWalletConnect from './views/Settings/NostrWalletConnect/index';
+import AddNWCConnection from './views/Settings/NostrWalletConnect/AddConnection';
 import ReceiveEcash from './views/Cashu/ReceiveEcash';
 import CashuInvoice from './views/Cashu/CashuInvoice';
 import CashuPayment from './views/Cashu/CashuPayment';
@@ -298,6 +301,7 @@ export default class App extends React.PureComponent {
                 MessageSignStore={messageSignStore}
                 ModalStore={modalStore}
                 NodeInfoStore={nodeInfoStore}
+                NostrWalletConnectStore={nostrWalletConnectStore}
                 NotesStore={notesStore}
                 OffersStore={offersStore}
                 PaymentsStore={paymentsStore}
@@ -1045,6 +1049,18 @@ export default class App extends React.PureComponent {
                                                         name="EcashSettings" // @ts-ignore:next-line
                                                         component={
                                                             EcashSettings
+                                                        }
+                                                    />
+                                                    <Stack.Screen
+                                                        name="NostrWalletConnect" // @ts-ignore:next-line
+                                                        component={
+                                                            NostrWalletConnect
+                                                        }
+                                                    />
+                                                    <Stack.Screen
+                                                        name="AddNWCConnection" // @ts-ignore:next-line
+                                                        component={
+                                                            AddNWCConnection
                                                         }
                                                     />
                                                     <Stack.Screen
