@@ -464,7 +464,7 @@ export default class CashuPaymentRequest extends React.Component<
                                             }}
                                         >
                                             <Row justify="space-between">
-                                                <View style={{ width: '95%' }}>
+                                                <View style={{ flex: 1 }}>
                                                     <KeyValue
                                                         keyValue={localeString(
                                                             'views.Settings.LightningAddress.zaplockerVerification'

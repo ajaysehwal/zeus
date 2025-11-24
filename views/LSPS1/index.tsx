@@ -465,7 +465,7 @@ export default class LSPS1 extends React.Component<LSPS1Props, LSPS1State> {
                                                     <Row justify="space-between">
                                                         <View
                                                             style={{
-                                                                width: '95%'
+                                                                flex: 1
                                                             }}
                                                         >
                                                             <Row justify="space-between">
@@ -899,9 +899,7 @@ export default class LSPS1 extends React.Component<LSPS1Props, LSPS1State> {
                                                 }}
                                             >
                                                 <Row justify="space-between">
-                                                    <View
-                                                        style={{ width: '95%' }}
-                                                    >
+                                                    <View style={{ flex: 1 }}>
                                                         <KeyValue
                                                             keyValue={localeString(
                                                                 'general.advancedSettings'
