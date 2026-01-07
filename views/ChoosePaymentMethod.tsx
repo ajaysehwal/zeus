@@ -1,10 +1,11 @@
 import * as React from 'react';
 import { Route } from '@react-navigation/native';
-import { Text, View } from 'react-native';
+import { Text, View, TouchableOpacity } from 'react-native';
 import { StackNavigationProp } from '@react-navigation/stack';
 import { LNURLWithdrawParams } from 'js-lnurl';
 import { inject, observer } from 'mobx-react';
 import bolt11 from 'bolt11';
+import BigNumber from 'bignumber.js';
 
 import Button from '../components/Button';
 import Header from '../components/Header';
@@ -16,11 +17,14 @@ import { ErrorMessage } from '../components/SuccessErrorMessage';
 import BalanceStore from '../stores/BalanceStore';
 import CashuStore from '../stores/CashuStore';
 import UTXOsStore from '../stores/UTXOsStore';
+import SwapStore from '../stores/SwapStore';
 
 import { localeString } from '../utils/LocaleUtils';
 import { themeColor } from '../utils/ThemeUtils';
 import BackendUtils from '../utils/BackendUtils';
 import Invoice from '../models/Invoice';
+
+import SwapIcon from '../assets/images/SVG/Swap.svg';
 
 interface ChoosePaymentMethodProps {
     navigation: StackNavigationProp<any, any>;
@@ -38,6 +42,7 @@ interface ChoosePaymentMethodProps {
     BalanceStore?: BalanceStore;
     CashuStore?: CashuStore;
     UTXOsStore?: UTXOsStore;
+    SwapStore?: SwapStore;
 }
 
 interface ChoosePaymentMethodState {
@@ -47,9 +52,10 @@ interface ChoosePaymentMethodState {
     lightningAddress: string;
     offer: string;
     lnurlParams: LNURLWithdrawParams | undefined;
+    validAmountToSwap: boolean;
 }
 
-@inject('BalanceStore', 'CashuStore', 'UTXOsStore')
+@inject('BalanceStore', 'CashuStore', 'UTXOsStore', 'SwapStore')
 @observer
 export default class ChoosePaymentMethod extends React.Component<
     ChoosePaymentMethodProps,
@@ -61,7 +67,8 @@ export default class ChoosePaymentMethod extends React.Component<
         lightning: '',
         lightningAddress: '',
         offer: '',
-        lnurlParams: undefined
+        lnurlParams: undefined,
+        validAmountToSwap: false
     };
 
     async componentDidMount() {
@@ -81,16 +88,26 @@ export default class ChoosePaymentMethod extends React.Component<
 
         // If satAmount is provided, use it directly
         if (satAmount) {
-            this.setState({ satAmount });
+            this.setState({ satAmount }, () => {
+                const validAmountToSwap = this.isAmountValidToSwap();
+                this.setState({ validAmountToSwap });
+            });
         } else if (lightning) {
             try {
                 const decodedInvoice = bolt11.decode(lightning);
                 const invoice = new Invoice(decodedInvoice);
 
                 if (invoice && invoice.getRequestAmount) {
-                    this.setState({
-                        satAmount: invoice.getRequestAmount.toString()
-                    });
+                    this.setState(
+                        {
+                            satAmount: invoice.getRequestAmount.toString()
+                        },
+                        () => {
+                            const validAmountToSwap =
+                                this.isAmountValidToSwap();
+                            this.setState({ validAmountToSwap });
+                        }
+                    );
                 }
             } catch (error) {
                 console.log('Error decoding invoice for amount:', error);
@@ -112,6 +129,71 @@ export default class ChoosePaymentMethod extends React.Component<
         if (lnurlParams) {
             this.setState({ lnurlParams });
         }
+    }
+
+    bigCeil = (big: BigNumber): BigNumber => {
+        return big.integerValue(BigNumber.ROUND_CEIL);
+    };
+
+    calculateSendAmount = (
+        receiveAmount: BigNumber,
+        serviceFee: number,
+        minerFee: number
+    ): BigNumber => {
+        if (receiveAmount.isNaN() || receiveAmount.isLessThanOrEqualTo(0)) {
+            return new BigNumber(0);
+        }
+        return this.bigCeil(
+            receiveAmount
+                .plus(
+                    this.bigCeil(
+                        receiveAmount.times(new BigNumber(serviceFee).div(100))
+                    )
+                )
+                .plus(minerFee)
+        );
+    };
+
+    calculateLimit = (limit: number): BigNumber => {
+        const { SwapStore } = this.props;
+        const subInfo: any = SwapStore!.subInfo;
+        const serviceFeePct = subInfo?.fees?.percentage || 0;
+        const networkFeeBigNum = new BigNumber(subInfo?.fees?.minerFees || 0);
+        const networkFee = networkFeeBigNum.toNumber();
+
+        return this.calculateSendAmount(
+            new BigNumber(limit),
+            serviceFeePct,
+            networkFee
+        );
+    };
+
+    isAmountValidToSwap(): boolean {
+        const { SwapStore } = this.props;
+        const { satAmount } = this.state;
+
+        if (!SwapStore || !satAmount) {
+            return false;
+        }
+
+        const subInfo: any = SwapStore.subInfo;
+
+        if (!subInfo || Object.keys(subInfo).length === 0) {
+            return false;
+        }
+
+        const min = this.calculateLimit(
+            subInfo?.limits?.minimal || 0
+        ).toNumber();
+        const max = this.calculateLimit(
+            subInfo?.limits?.maximal || 0
+        ).toNumber();
+        const minBN = new BigNumber(min);
+        const maxBN = new BigNumber(max);
+
+        const input = this.calculateLimit(Number(satAmount) || 0);
+
+        return input.gte(minBN) && input.lte(maxBN);
     }
     hasInsufficientFunds = () => {
         const { BalanceStore, CashuStore, UTXOsStore } = this.props;
@@ -166,13 +248,49 @@ export default class ChoosePaymentMethod extends React.Component<
             lightning,
             lightningAddress,
             offer,
-            lnurlParams
+            lnurlParams,
+            validAmountToSwap
         } = this.state;
 
         const { accounts } = UTXOsStore!;
         const { totalBlockchainBalance, lightningBalance } = BalanceStore!;
         const { totalBalanceSats } = CashuStore!;
         const hasInsufficientFunds = this.hasInsufficientFunds();
+
+        const isNoAmountInvoice: boolean = !satAmount || satAmount === '0';
+
+        const SwapButton = () => {
+            if (!validAmountToSwap || !lightning) return null;
+
+            return (
+                <TouchableOpacity
+                    onPress={() => {
+                        const amountToSwap = satAmount;
+                        if (lightning && amountToSwap) {
+                            navigation.navigate('Swaps', {
+                                initialInvoice: lightning,
+                                initialAmountSats: amountToSwap.toString(),
+                                initialReverse: false // OnChain -> LN for paying a LN invoice
+                            });
+                        }
+                    }}
+                    disabled={!lightning || (!isNoAmountInvoice && !satAmount)}
+                    style={{
+                        opacity:
+                            !lightning || (!isNoAmountInvoice && !satAmount)
+                                ? 0.5
+                                : 1
+                    }}
+                >
+                    <SwapIcon
+                        fill={themeColor('text')}
+                        width="36"
+                        height="26"
+                        style={{ marginRight: 10 }}
+                    />
+                </TouchableOpacity>
+            );
+        };
 
         return (
             <Screen>
@@ -182,6 +300,9 @@ export default class ChoosePaymentMethod extends React.Component<
                         text: localeString('views.Accounts.select'),
                         style: { color: themeColor('text') }
                     }}
+                    rightComponent={
+                        validAmountToSwap ? <SwapButton /> : undefined
+                    }
                     navigation={navigation}
                 />
                 {!!satAmount && (
