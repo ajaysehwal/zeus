@@ -35,6 +35,9 @@ class CashuUtils {
         return true;
     };
     sumProofsValue = (proofs: any) => {
+        if (!proofs || !Array.isArray(proofs)) {
+            return 0;
+        }
         return proofs.reduce((r: number, c: any) => {
             return r + c.amount;
         }, 0);

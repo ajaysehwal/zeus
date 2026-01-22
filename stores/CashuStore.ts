@@ -1794,9 +1794,21 @@ export default class CashuStore {
             await this.initializeWallet(mint, true);
         }
 
+        if (
+            !decoded.proofs ||
+            !Array.isArray(decoded.proofs) ||
+            decoded.proofs.length === 0
+        ) {
+            return false;
+        }
+
         const wallet = this.cashuWallets[mint].wallet;
 
         const states = await wallet!!.checkProofsStates(decoded.proofs);
+
+        if (!states || !Array.isArray(states)) {
+            return false;
+        }
 
         let alreadySpent = false;
         states.forEach((state) => {
