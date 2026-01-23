@@ -290,7 +290,8 @@ export default class App extends React.PureComponent {
     private static SCREENS_WITH_CUSTOM_BACK_HANDLER = [
         'SendingLightning',
         'SendingOnChain',
-        'CashuSendingLightning'
+        'CashuSendingLightning',
+        'IntroSplash'
     ];
 
     private handleBackPress = (navigation: any) => {
