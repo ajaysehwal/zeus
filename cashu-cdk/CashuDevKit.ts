@@ -15,6 +15,7 @@ import {
     CDKMeltQuote,
     CDKMelted,
     CDKSpendingConditions,
+    CDKP2PKCondition,
     CDKSendOptions,
     CDKReceiveOptions,
     CDKProofState,
@@ -505,9 +506,23 @@ class CashuDevKit {
         const options: CDKSendOptions = {
             send_kind: 'OnlineExact',
             include_fee: true,
-            conditions,
             memo: memo ? { memo, include_memo: true } : undefined
         };
+        if (conditions && conditions.kind === 'P2PK' && conditions.data) {
+            options.conditions = conditions;
+        }
+        // Only add conditions when we have a valid P2PK pubkey
+        const pubkey =
+            conditions?.kind === 'P2PK' &&
+            conditions?.data &&
+            typeof (conditions.data as CDKP2PKCondition).pubkey === 'string'
+                ? (
+                      (conditions.data as CDKP2PKCondition).pubkey as string
+                  ).trim()
+                : '';
+        if (pubkey.length > 0) {
+            options.conditions = conditions;
+        }
 
         const preparedId = await this.prepareSend(mintUrl, amount, options);
         return await this.confirmSend(preparedId, memo);
@@ -549,10 +564,12 @@ class CashuDevKit {
         options?: CDKReceiveOptions
     ): Promise<number> {
         try {
-            return await CashuDevKitModule.receive(
-                encodedToken,
-                options ? JSON.stringify(options) : undefined
-            );
+            // Always pass a string so native side gets consistent options (never undefined)
+            const optionsJson =
+                options != null
+                    ? JSON.stringify(options)
+                    : JSON.stringify({ p2pk_signing_keys: [] });
+            return await CashuDevKitModule.receive(encodedToken, optionsJson);
         } catch (error) {
             throw mapCDKError(error);
         }
@@ -622,7 +639,22 @@ class CashuDevKit {
                 mintUrl,
                 JSON.stringify(proofs)
             );
-            return JSON.parse(json);
+
+            // Handle empty or invalid JSON response
+            if (!json || typeof json !== 'string' || json.trim().length === 0) {
+                throw new Error('Empty response from checkProofsState');
+            }
+
+            try {
+                return JSON.parse(json);
+            } catch (parseError) {
+                throw new Error(
+                    `Invalid JSON response from checkProofsState: ${json.substring(
+                        0,
+                        100
+                    )}`
+                );
+            }
         } catch (error) {
             throw mapCDKError(error);
         }
