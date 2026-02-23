@@ -1,6 +1,5 @@
 import * as React from 'react';
 import {
-    Dimensions,
     Platform,
     ScrollView,
     StyleSheet,
@@ -22,7 +21,6 @@ import SwipeButton from '../../components/SwipeButton';
 import Conversion from '../../components/Conversion';
 import Header from '../../components/Header';
 import KeyValue from '../../components/KeyValue';
-import LightningLoadingPattern from '../../components/LightningLoadingPattern';
 import LoadingIndicator from '../../components/LoadingIndicator';
 import Screen from '../../components/Screen';
 import { WarningMessage } from '../../components/SuccessErrorMessage';
@@ -79,7 +77,6 @@ interface CashuPaymentRequestState {
     donationAmount: any;
     selectedIndex: number | null;
     swipeButtonKey: number;
-    sendingPayment: boolean;
 }
 
 @inject(
@@ -108,8 +105,7 @@ export default class CashuPaymentRequest extends React.Component<
         donationPercentage: 0,
         donationAmount: 0,
         selectedIndex: null,
-        swipeButtonKey: 0,
-        sendingPayment: false
+        swipeButtonKey: 0
     };
 
     async componentDidMount() {
@@ -152,8 +148,7 @@ export default class CashuPaymentRequest extends React.Component<
         this.focusListener = this.props.navigation.addListener('focus', () => {
             getPayReq(paymentRequest!!);
             this.setState({
-                swipeButtonKey: this.state.swipeButtonKey + 1,
-                sendingPayment: false
+                swipeButtonKey: this.state.swipeButtonKey + 1
             });
         });
     }
@@ -180,16 +175,13 @@ export default class CashuPaymentRequest extends React.Component<
             Platform.OS !== 'ios' && settings?.payments?.enableDonations;
         const { donationAmount } = this.state;
 
-        // Show loading overlay immediately, then navigate
-        this.setState({ sendingPayment: true }, () => {
-            navigation.navigate('CashuSendingLightning', {
-                enableDonations,
-                ...(enableDonations &&
-                    donationAmount > 0 && {
-                        donationAmount: donationAmount.toString()
-                    }),
-                paymentAmount: amount ? amount : undefined
-            });
+        navigation.navigate('CashuSendingLightning', {
+            enableDonations,
+            ...(enableDonations &&
+                donationAmount > 0 && {
+                    donationAmount: donationAmount.toString()
+                }),
+            paymentAmount: amount ? amount : undefined
         });
     };
 
@@ -218,38 +210,8 @@ export default class CashuPaymentRequest extends React.Component<
             slideToPayThreshold,
             donationsToggle,
             donationAmount,
-            donationPercentage,
-            sendingPayment
+            donationPercentage
         } = this.state;
-
-        // Show full-screen loading animation when sending payment
-        if (sendingPayment) {
-            const windowSize = Dimensions.get('window');
-            return (
-                <Screen>
-                    <View
-                        style={{
-                            flex: 1,
-                            alignItems: 'center',
-                            justifyContent: 'center'
-                        }}
-                    >
-                        <LightningLoadingPattern />
-                        <Text
-                            style={{
-                                color: themeColor('text'),
-                                fontFamily: 'PPNeueMontreal-Book',
-                                paddingBottom: windowSize.height / 10,
-                                fontSize:
-                                    windowSize.width * windowSize.scale * 0.014
-                            }}
-                        >
-                            {localeString('views.SendingLightning.sending')}
-                        </Text>
-                    </View>
-                </Screen>
-            );
-        }
         const {
             payReq,
             paymentRequest,
