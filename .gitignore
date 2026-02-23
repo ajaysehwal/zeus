@@ -78,8 +78,15 @@ android/lndmobile/Lndmobile.aar
 ios/LncMobile/Lndmobile.xcframework
 ios/LndMobileLibZipFile
 
-# Cashu binaries
+# Cashu CDK binaries
 android/cdk/cashudevkit.aar
 ios/Cdk/cdkFFI.xcframework
 ios/CashuDevKitLibZipFile
 ios/CashuDevKit/CashuDevKit.swift
+
+# Zeus Cashu Restore binaries and generated bindings
+android/zeus-restore/zeus-cashu-restore.aar
+android/app/src/main/java/uniffi/zeus_cashu_restore/
+ios/ZeusRestore/zeusRestoreFFI.xcframework
+ios/ZeusRestoreLibZipFile
+ios/CashuDevKit/zeus_cashu_restore.swift
