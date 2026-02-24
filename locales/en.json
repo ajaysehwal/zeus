@@ -335,6 +335,8 @@
     "views.Settings.AddEditNode.certificateVerification": "Certificate Verification",
     "views.Settings.AddEditNode.createLndhub": "Create LNDHub account",
     "views.Settings.WalletConfiguration.saveWallet": "Save Wallet Config",
+    "views.Settings.WalletConfiguration.syncingWalletCreateBlocked.title": "Wallet Still Syncing",
+    "views.Settings.WalletConfiguration.syncingWalletCreateBlocked.message": "Please wait for the current wallet to finish syncing before creating a new one.",
     "views.Settings.WalletConfiguration.setWalletActive": "Set Wallet Config as Active",
     "views.Settings.WalletConfiguration.walletActive": "Wallet Active",
     "views.Settings.AddEditNode.scanLndconnect": "Scan lndconnect config",

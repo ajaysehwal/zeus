@@ -49,6 +49,7 @@ import ShowHideToggle from '../../components/ShowHideToggle';
 
 import BalanceStore from '../../stores/BalanceStore';
 import ChannelsStore from '../../stores/ChannelsStore';
+import SyncStore from '../../stores/SyncStore';
 import SettingsStore, {
     INTERFACE_KEYS,
     LNC_MAILBOX_KEYS,
@@ -75,6 +76,7 @@ interface WalletConfigurationProps {
     BalanceStore: BalanceStore;
     ChannelsStore: ChannelsStore;
     SettingsStore: SettingsStore;
+    SyncStore: SyncStore;
     route: Route<
         'WalletConfiguration',
         {
@@ -153,7 +155,7 @@ const ScanBadge = ({ onPress }: { onPress: () => void }) => (
     </TouchableOpacity>
 );
 
-@inject('BalanceStore', 'ChannelsStore', 'SettingsStore')
+@inject('BalanceStore', 'ChannelsStore', 'SettingsStore', 'SyncStore')
 @observer
 export default class WalletConfiguration extends React.Component<
     WalletConfigurationProps,
@@ -753,8 +755,21 @@ export default class WalletConfiguration extends React.Component<
 
     createNewWallet = async (network: string = 'Mainnet') => {
         const { recoveryCipherSeed, channelBackupsBase64 } = this.state;
-        const { SettingsStore } = this.props;
+        const { SettingsStore, SyncStore } = this.props;
         const { embeddedLndStarted } = SettingsStore;
+
+        if (SyncStore.isSyncing) {
+            Alert.alert(
+                localeString(
+                    'views.Settings.WalletConfiguration.syncingWalletCreateBlocked.title'
+                ),
+                localeString(
+                    'views.Settings.WalletConfiguration.syncingWalletCreateBlocked.message'
+                ),
+                [{ text: localeString('general.ok') }]
+            );
+            return;
+        }
 
         this.setState({
             creatingWallet: true,
