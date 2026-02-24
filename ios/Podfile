@@ -28,6 +28,9 @@ target 'zeus' do
   # CashuDevKit - Cashu wallet FFI bindings (local xcframework)
   pod 'CashuDevKit', :path => '.'
 
+  # ZeusCashuRestore - standalone NUT-13 restore for v1 legacy seeds
+  pod 'ZeusCashuRestore', :path => '.'
+
   # Enables Flipper.
   #
   # Note that if you have use_frameworks! enabled, Flipper will not work and
@@ -47,6 +50,8 @@ target 'zeus' do
         # CashuDevKit framework search path
         config.build_settings['FRAMEWORK_SEARCH_PATHS'] ||= ['$(inherited)']
         config.build_settings['FRAMEWORK_SEARCH_PATHS'] << '"$(SRCROOT)/Cdk"'
+        # Zeus Cashu Restore framework search path
+        config.build_settings['FRAMEWORK_SEARCH_PATHS'] << '"$(SRCROOT)/ZeusRestore"'
         # Lndmobile framework search path
         config.build_settings['FRAMEWORK_SEARCH_PATHS'] << '"$(SRCROOT)/LncMobile"'
       end

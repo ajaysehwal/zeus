@@ -8,8 +8,11 @@ import org.json.JSONObject
 import java.io.File
 import java.net.HttpURLConnection
 import java.net.URL
+import java.security.MessageDigest
 
 import org.cashudevkit.*
+import uniffi.zeus_cashu_restore.restoreFromSeed as zeusRestoreFromSeed
+import uniffi.zeus_cashu_restore.RestoreException
 
 /**
  * CashuDevKit Native Module for React Native
@@ -78,9 +81,15 @@ class CashuDevKitModule(private val reactContext: ReactApplicationContext) :
         return wallet
     }
 
-    private fun getDatabasePath(): String {
+    private var currentDbPath: String? = null
+
+    private fun getDatabasePath(mnemonic: String): String {
         val filesDir = reactContext.filesDir
-        return File(filesDir, "cashu_wallet.db").absolutePath
+        // Hash the mnemonic to create a unique, deterministic filename per wallet
+        val digest = MessageDigest.getInstance("SHA-256")
+        val hashBytes = digest.digest(mnemonic.toByteArray(Charsets.UTF_8))
+        val hashHex = hashBytes.take(8).joinToString("") { "%02x".format(it) }
+        return File(filesDir, "cashu_wallet_$hashHex.db").absolutePath
     }
 
     private fun parseCurrencyUnit(unit: String): CurrencyUnit {
@@ -240,7 +249,7 @@ class CashuDevKitModule(private val reactContext: ReactApplicationContext) :
 
     @ReactMethod
     fun getDatabasePath(promise: Promise) {
-        promise.resolve(getDatabasePath())
+        promise.resolve(currentDbPath ?: "")
     }
 
     // ========================================================================
@@ -251,7 +260,8 @@ class CashuDevKitModule(private val reactContext: ReactApplicationContext) :
     fun initializeWallet(mnemonic: String, unit: String, promise: Promise) {
         scope.launch {
             try {
-                val dbPath = getDatabasePath()
+                val dbPath = getDatabasePath(mnemonic)
+                currentDbPath = dbPath
                 val database = WalletSqliteDatabase(dbPath)
                 db = database
 
@@ -1137,6 +1147,63 @@ class CashuDevKitModule(private val reactContext: ReactApplicationContext) :
                 Log.e(TAG, "restore error", e)
                 withContext(Dispatchers.Main) {
                     promise.reject("RESTORE_ERROR", e.message, e)
+                }
+            }
+        }
+    }
+
+    @ReactMethod
+    fun restoreFromSeed(mintUrl: String, seedHex: String, promise: Promise) {
+        val wallet = getInitializedWallet(promise) ?: return
+
+        scope.launch {
+            try {
+                // Step 1: Call standalone restore crate to get v1 proofs as a cashu token
+                val tokenString = zeusRestoreFromSeed(mintUrl, seedHex)
+
+                // If no proofs found, return 0
+                if (tokenString.isEmpty()) {
+                    withContext(Dispatchers.Main) {
+                        promise.resolve(0.0)
+                    }
+                    return@launch
+                }
+
+                // Step 2: Feed the token into CDK's receive to import proofs into the wallet
+                val token = Token.fromString(tokenString)
+
+                val innerReceiveOptions = ReceiveOptions(
+                    amountSplitTarget = SplitTarget.None,
+                    p2pkSigningKeys = emptyList(),
+                    preimages = emptyList(),
+                    metadata = emptyMap()
+                )
+                val receiveOptions = MultiMintReceiveOptions(
+                    allowUntrusted = true,
+                    transferToMint = null,
+                    receiveOptions = innerReceiveOptions
+                )
+
+                val amount = wallet.receive(token, receiveOptions)
+
+                withContext(Dispatchers.Main) {
+                    promise.resolve(amount.value.toDouble())
+                }
+            } catch (e: RestoreException) {
+                Log.e(TAG, "restoreFromSeed restore error: ${e.message}", e)
+                withContext(Dispatchers.Main) {
+                    promise.reject("RESTORE_FROM_SEED_ERROR", e.message, e)
+                }
+            } catch (e: FfiException) {
+                val (code, message) = mapFfiException(e)
+                Log.e(TAG, "restoreFromSeed CDK error: $message", e)
+                withContext(Dispatchers.Main) {
+                    promise.reject(code, message, e)
+                }
+            } catch (e: Exception) {
+                Log.e(TAG, "restoreFromSeed error", e)
+                withContext(Dispatchers.Main) {
+                    promise.reject("RESTORE_FROM_SEED_ERROR", e.message, e)
                 }
             }
         }

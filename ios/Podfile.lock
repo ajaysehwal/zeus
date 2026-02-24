@@ -3307,6 +3307,7 @@ PODS:
   - VisionCamera/React (4.7.3):
     - React-Core
   - Yoga (0.0.0)
+  - ZeusCashuRestore (0.1.0)
 
 DEPENDENCIES:
   - boost (from `../node_modules/react-native/third-party-podspecs/boost.podspec`)
@@ -3431,6 +3432,7 @@ DEPENDENCIES:
   - SwiftProtobuf (~> 1.0)
   - VisionCamera (from `../node_modules/react-native-vision-camera`)
   - Yoga (from `../node_modules/react-native/ReactCommon/yoga`)
+  - ZeusCashuRestore (from `.`)
 
 SPEC REPOS:
   trunk:
@@ -3679,6 +3681,8 @@ EXTERNAL SOURCES:
     :path: "../node_modules/react-native-vision-camera"
   Yoga:
     :path: "../node_modules/react-native/ReactCommon/yoga"
+  ZeusCashuRestore:
+    :path: "."
 
 SPEC CHECKSUMS:
   boost: 7e761d76ca2ce687f7cc98e698152abd03a18f90
@@ -3804,7 +3808,8 @@ SPEC CHECKSUMS:
   SwiftProtobuf: e1b437c8e31a4c5577b643249a0bb62ed4f02153
   VisionCamera: 7187b3dac1ff3071234ead959ce311875748e14f
   Yoga: 5456bb010373068fc92221140921b09d126b116e
+  ZeusCashuRestore: 393af11e3fda37ed1948256a2e6d33b7e7267802
 
-PODFILE CHECKSUM: 7ee05b2fb1ef4f8376c104a261a39f769637fb6c
+PODFILE CHECKSUM: a9eb6524ca9459fe0cc656700d9336e519cca4bf
 
 COCOAPODS: 1.16.2
