@@ -2367,6 +2367,7 @@ export default class Receive extends React.Component<
                                                         style={{
                                                             flexDirection:
                                                                 'row',
+                                                            marginTop: 10,
                                                             marginBottom: 15
                                                         }}
                                                     >
