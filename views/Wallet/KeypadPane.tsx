@@ -1,3 +1,5 @@
+const CLEAR_VALUE_DELAY = 500;
+
 import * as React from 'react';
 import {
     Animated,
@@ -178,13 +180,19 @@ export default class KeypadPane extends React.PureComponent<
         return true;
     };
 
-    clearValue = () => {
-        this.setState({
-            amount: '0',
-            needInbound: false,
-            belowMinAmount: false,
-            overrideBelowMinAmount: false
-        });
+    clearValue = (delayed?: boolean) => {
+        const clear = () =>
+            this.setState({
+                amount: '0',
+                needInbound: false,
+                belowMinAmount: false,
+                overrideBelowMinAmount: false
+            });
+        if (delayed) {
+            setTimeout(clear, CLEAR_VALUE_DELAY);
+        } else {
+            clear();
+        }
     };
 
     deleteValue = () => {
@@ -480,6 +488,7 @@ export default class KeypadPane extends React.PureComponent<
                                                             : true
                                                 }
                                             );
+                                            this.clearValue(true);
                                         }}
                                         buttonStyle={{ height: 40 }}
                                         disabled={
@@ -509,6 +518,7 @@ export default class KeypadPane extends React.PureComponent<
                                                     amount
                                                 }
                                             );
+                                            this.clearValue(true);
                                         }}
                                         buttonStyle={{ height: 40 }}
                                         disabled={
@@ -534,6 +544,7 @@ export default class KeypadPane extends React.PureComponent<
                                                               )
                                                             : ''
                                                 });
+                                                this.clearValue(true);
                                             }
                                         }}
                                         buttonStyle={{ height: 40 }}
@@ -579,6 +590,7 @@ export default class KeypadPane extends React.PureComponent<
                                     amount: amount !== '0' ? amount : ''
                                 });
                                 this.modalBoxRef.current?.close();
+                                this.clearValue(true);
                             }}
                             style={{
                                 ...styles.sendOption,
@@ -613,6 +625,7 @@ export default class KeypadPane extends React.PureComponent<
                                     amount: amount !== '0' ? amount : ''
                                 });
                                 this.modalBoxRef.current?.close();
+                                this.clearValue(true);
                             }}
                             style={{
                                 ...styles.sendOption,
