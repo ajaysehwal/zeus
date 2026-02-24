@@ -205,44 +205,61 @@ export default class InvoicesStore {
             unified: true,
             customPreimage,
             noLsp
-        }).then(
-            ({
-                rHash,
-                paymentRequest
-            }: {
-                rHash: string;
-                paymentRequest: string;
-            }) => {
-                if (BackendUtils.supportsOnchainReceiving() && !skipOnchain) {
-                    return this.getNewAddress(
-                        addressType
-                            ? { type: addressType, unified: true }
-                            : { unified: true }
-                    )
-                        .then((onChainAddress: string) => {
-                            runInAction(() => {
-                                this.onChainAddress = onChainAddress;
-                                this.payment_request = paymentRequest;
-                                this.loading = false;
-                                this.creatingInvoice = false;
-                            });
-                            return { rHash, onChainAddress };
-                        })
-                        .catch(() => {
-                            runInAction(() => {
-                                this.loading = false;
-                                this.creatingInvoice = false;
-                            });
+        })
+            .then(
+                (
+                    result:
+                        | { rHash: string; paymentRequest: string }
+                        | undefined
+                ) => {
+                    if (!result?.rHash || !result?.paymentRequest) {
+                        runInAction(() => {
+                            this.loading = false;
+                            this.creatingInvoice = false;
                         });
-                } else {
-                    runInAction(() => {
-                        this.payment_request = paymentRequest;
-                        this.creatingInvoice = false;
-                    });
-                    return { rHash };
+                        return;
+                    }
+                    const { rHash, paymentRequest } = result;
+                    if (
+                        BackendUtils.supportsOnchainReceiving() &&
+                        !skipOnchain
+                    ) {
+                        return this.getNewAddress(
+                            addressType
+                                ? { type: addressType, unified: true }
+                                : { unified: true }
+                        )
+                            .then((onChainAddress: string) => {
+                                runInAction(() => {
+                                    this.onChainAddress = onChainAddress;
+                                    this.payment_request = paymentRequest;
+                                    this.loading = false;
+                                    this.creatingInvoice = false;
+                                });
+                                return { rHash, onChainAddress };
+                            })
+                            .catch(() => {
+                                runInAction(() => {
+                                    this.loading = false;
+                                    this.creatingInvoice = false;
+                                });
+                            });
+                    } else {
+                        runInAction(() => {
+                            this.payment_request = paymentRequest;
+                            this.creatingInvoice = false;
+                        });
+                        return { rHash };
+                    }
                 }
-            }
-        );
+            )
+            .catch((error: any) => {
+                runInAction(() => {
+                    this.loading = false;
+                    this.creatingInvoice = false;
+                });
+                throw error;
+            });
     };
 
     @action
@@ -312,7 +329,7 @@ export default class InvoicesStore {
                                         'stores.InvoicesStore.errorCreatingInvoice'
                                     );
                             });
-                            return;
+                            return Promise.reject(error);
                         }
                     }
                     const remotePolicy =
@@ -384,7 +401,11 @@ export default class InvoicesStore {
 
         if (this.lspStore.flow_error) {
             this.creatingInvoice = false;
-            return;
+            return Promise.reject(
+                new Error(
+                    localeString('stores.InvoicesStore.errorCreatingInvoice')
+                )
+            );
         }
 
         return BackendUtils.createInvoice(req)
@@ -408,6 +429,7 @@ export default class InvoicesStore {
                                       'stores.InvoicesStore.errorCreatingInvoice'
                                   );
                     });
+                    return;
                 }
                 const invoice = new Invoice(data);
 
@@ -492,6 +514,7 @@ export default class InvoicesStore {
                             'stores.InvoicesStore.errorCreatingInvoice'
                         );
                 });
+                throw error;
             });
     };
 
