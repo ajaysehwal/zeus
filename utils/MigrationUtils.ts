@@ -965,9 +965,12 @@ class MigrationsUtils {
 
             if (hasMigrated !== 'true') {
                 console.log('Attempting keychain cloud sync migration...');
-                settingsStore.isMigrating = true;
 
                 const settingsData = await this.migrateKey(STORAGE_KEY);
+
+                if (settingsData) {
+                    settingsStore.isMigrating = true;
+                }
 
                 const migrationKeys = [
                     CONTACTS_KEY,
@@ -1038,10 +1041,10 @@ class MigrationsUtils {
 
             if (cashuMigration !== 'true') {
                 console.log('Running Cashu Multi-Node Migration...');
-                settingsStore.isMigrating = true;
 
                 const settingsJson = await Storage.getItem(STORAGE_KEY);
                 if (settingsJson) {
+                    settingsStore.isMigrating = true;
                     const settings = JSON.parse(settingsJson);
                     if (settings.nodes && Array.isArray(settings.nodes)) {
                         for (const node of settings.nodes) {
