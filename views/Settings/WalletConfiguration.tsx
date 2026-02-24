@@ -670,6 +670,7 @@ export default class WalletConfiguration extends React.Component<
                     'Stopping active LND before deletion:',
                     lndDir || 'lnd'
                 );
+                this.props.SyncStore.reset(); // Stop sync loop before stopping LND
                 await stopLnd();
             } catch (error) {
                 console.log('Error stopping LND before deletion:', error);
@@ -782,6 +783,7 @@ export default class WalletConfiguration extends React.Component<
                 console.log(
                     'Stopping existing LND before creating new wallet...'
                 );
+                SyncStore.reset(); // Stop sync loop before stopping LND to prevent crash
                 await stopLnd();
                 console.log('LND stopped successfully');
             } catch (error) {
@@ -797,6 +799,7 @@ export default class WalletConfiguration extends React.Component<
 
         const lndDir = uuidv4();
 
+        SyncStore.reset();
         let response;
         try {
             response = await createLndWallet({

@@ -29,6 +29,7 @@ import BackendUtils from '../../utils/BackendUtils';
 import { localeString } from '../../utils/LocaleUtils';
 import { getPhoto } from '../../utils/PhotoUtils';
 import { themeColor } from '../../utils/ThemeUtils';
+import { sleep } from '../../utils/SleepUtils';
 
 import Add from '../../assets/images/SVG/Add.svg';
 import DragDots from '../../assets/images/SVG/DragDots.svg';
@@ -125,7 +126,6 @@ export default class Nodes extends React.Component<NodesProps, NodesState> {
         } else {
             this.refreshSettings();
         }
-        this.handleJustDeletedWallet();
     };
 
     handleJustDeletedWallet = async () => {
@@ -133,10 +133,10 @@ export default class Nodes extends React.Component<NodesProps, NodesState> {
         const { settings, updateSettings, setConnectingStatus } = SettingsStore;
 
         if (!settings?.justDeletedWallet) return;
-
+        setConnectingStatus(true);
+        await sleep(2000);
         const { nodes, selectedNode } = settings;
         const newSelectedNode = nodes?.[selectedNode ?? 0];
-
         if (newSelectedNode) {
             try {
                 console.log(
@@ -144,7 +144,6 @@ export default class Nodes extends React.Component<NodesProps, NodesState> {
                     selectedNode
                 );
                 await updateSettings({ justDeletedWallet: false });
-                setConnectingStatus(true);
                 this.navigateAfterWalletSelection();
             } catch (error) {
                 console.error('Error restarting after wallet deletion:', error);
@@ -259,6 +258,10 @@ export default class Nodes extends React.Component<NodesProps, NodesState> {
             nodeIndex: number,
             nodeActive: boolean
         ) => {
+            if (SettingsStore.settings?.justDeletedWallet) {
+                this.handleJustDeletedWallet();
+                return;
+            }
             if (initialStart) {
                 setInitialStart(false);
             }
@@ -314,6 +317,9 @@ export default class Nodes extends React.Component<NodesProps, NodesState> {
                             color: themeColor('text'),
                             fontFamily: 'PPNeueMontreal-Book'
                         }
+                    }}
+                    onBack={async () => {
+                        await this.handleJustDeletedWallet();
                     }}
                     rightComponent={<AddButton />}
                     navigation={navigation}

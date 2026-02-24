@@ -314,6 +314,8 @@ export default class LSPStore {
                 'ChannelAcceptor',
                 async (event: any) => {
                     try {
+                        if (!event?.data) return;
+
                         const channelAcceptRequest =
                             channel.decodeChannelAcceptRequest(event.data);
 
@@ -426,8 +428,18 @@ export default class LSPStore {
 
     @action
     public handleCustomMessages = (decoded: any) => {
+        if (!decoded?.peer || !decoded?.data) return;
+        let data: any;
+        try {
+            data = JSON.parse(Base64Utils.base64ToUtf8(decoded.data));
+        } catch (parseError: any) {
+            console.warn(
+                'Custom message data is not valid JSON, skipping:',
+                parseError?.message
+            );
+            return;
+        }
         const peer = Base64Utils.base64ToHex(decoded.peer);
-        const data = JSON.parse(Base64Utils.base64ToUtf8(decoded.data));
 
         console.log('Received custom message', { peer, data });
 
@@ -507,6 +519,7 @@ export default class LSPStore {
             this.customMessagesSubscriber = LndMobileEventEmitter.addListener(
                 'SubscribeCustomMessages',
                 async (event: any) => {
+                    if (!event?.data) return;
                     try {
                         const decoded = index.decodeCustomMessage(event.data);
                         runInAction(() => {

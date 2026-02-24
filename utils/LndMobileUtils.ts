@@ -708,13 +708,13 @@ async function startLndWithRetry({
         if (
             matchesLndErrorCode(errorMessage, LndErrorCode.LND_ALREADY_RUNNING)
         ) {
+            await stopLnd();
             log.d(
                 'LND already started (likely from wallet creation) - continuing...'
             );
-            return;
         }
 
-        log.e('Error starting LND, attempting retry', [error]);
+        log.w('Error starting LND, attempting retry', [error]);
         await retryStartLnd({
             startLnd,
             startArgs,
@@ -772,7 +772,7 @@ async function retryStartLnd({
                 return;
             }
 
-            log.e(`Retry attempt ${attempt}/${MAX_START_LND_RETRIES} failed`, [
+            log.w(`Retry attempt ${attempt}/${MAX_START_LND_RETRIES} failed`, [
                 retryError
             ]);
             if (attempt === MAX_START_LND_RETRIES) {
@@ -870,7 +870,10 @@ async function waitForLndReady({
                         log.d('RPC is active - waiting for RPC ready');
                         try {
                             await waitForRpcReady();
-                            syncStore.startSyncing();
+                            // Only start sync when unlocking existing wallet - not during wallet creation
+                            if (walletPassword && !syncStore.isSyncing) {
+                                syncStore.startSyncing();
+                            }
                             if (settingsStore?.settings?.rescan) {
                                 syncStore.startRescanTracking(0);
                             }
@@ -888,6 +891,20 @@ async function waitForLndReady({
 
                     case lnrpc.WalletState.SERVER_ACTIVE:
                         log.d('Server is active');
+                        try {
+                            await waitForRpcReady();
+                            if (walletPassword && !syncStore.isSyncing) {
+                                log.d('Starting sync');
+                                syncStore.startSyncing();
+                            }
+                            if (settingsStore?.settings?.rescan) {
+                                syncStore.startRescanTracking(0);
+                            }
+                        } catch (rpcError: any) {
+                            log.e('RPC ready check failed (SERVER_ACTIVE)', [
+                                rpcError
+                            ]);
+                        }
                         isResolved = true;
                         cleanup();
                         resolve(true);
@@ -1122,8 +1139,59 @@ export async function optimizeNeutrinoPeers(
     return;
 }
 
-/** Delay between stopping LND and starting it again */
-const GEN_SEED_STOP_DELAY_MS = Platform.OS === 'android' ? 3500 : 2000;
+const GEN_SEED_STOP_DELAY_MS = 3000;
+/**
+ * Stops LND, waits for process to fully terminate, then starts fresh.
+ * Used when genSeed fails due to "unlocked too quickly" - we need a clean restart.
+ */
+async function restartLndForWalletCreation(
+    lndDir: string,
+    isTestnet: boolean
+): Promise<void> {
+    const { startLnd, decodeState, subscribeState } = lndMobile.index;
+    const { unlockWallet } = lndMobile.wallet;
+    const maxAttempts = 10;
+
+    for (let i = 0; i < maxAttempts; i++) {
+        log.d(
+            `Restarting LND for wallet creation (attempt ${
+                i + 1
+            }/${maxAttempts})`
+        );
+        await stopLnd();
+        const delay = GEN_SEED_STOP_DELAY_MS + i * 1000;
+        await sleep(delay);
+
+        try {
+            await startLnd({
+                args: '',
+                lndDir,
+                isTorEnabled: false,
+                isTestnet
+            });
+            await sleep(500);
+            await waitForLndReady({
+                decodeState,
+                subscribeState,
+                walletPassword: '',
+                unlockWallet
+            });
+            return;
+        } catch (err: any) {
+            const msg = getErrorMessage(err);
+            if (matchesLndErrorCode(msg, LndErrorCode.LND_ALREADY_RUNNING)) {
+                log.d(
+                    `LND still running after stop, retrying with longer delay (${
+                        GEN_SEED_STOP_DELAY_MS + (i + 1) * 1000
+                    }ms)`
+                );
+                continue;
+            }
+            throw err;
+        }
+    }
+    throw createLndError(LndErrorCode.WALLET_CREATION_UNLOCKED_TOO_QUICKLY);
+}
 
 /**
  * Calls genSeed with retry when LND transitions too quickly (WalletUnlocker race condition)
@@ -1141,25 +1209,16 @@ async function genSeedWithRetry(
             }
             return seed;
         },
-        maxRetries: 5,
-        delayMs: 0,
+        maxRetries: 10,
+        delayMs: 500,
         shouldRetry: (e) =>
             matchesLndErrorCode(
                 getErrorMessage(e),
                 LndErrorCode.GEN_SEED_UNLOCKED
             ),
         onRetry: async () => {
-            log.d(
-                'LND unlocked too quickly - stopping and retrying wallet creation'
-            );
-            await stopLnd();
-            await sleep(GEN_SEED_STOP_DELAY_MS);
-            await startLnd({
-                lndDir,
-                walletPassword: '',
-                isTorEnabled: false,
-                isTestnet
-            });
+            log.d('LND unlocked too quickly - restarting for wallet creation');
+            await restartLndForWalletCreation(lndDir, isTestnet ?? false);
         }
     }).catch((e) => {
         const msg = getErrorMessage(e);

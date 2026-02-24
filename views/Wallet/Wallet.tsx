@@ -640,7 +640,6 @@ export default class Wallet extends React.Component<WalletProps, WalletState> {
 
                     // Handle LND start failed after max retries - show restart modal
                     if (isLndError(error, LndErrorCode.LND_START_FAILED)) {
-                        setConnectingStatus(false);
                         this.props.ModalStore.toggleInfoModal({
                             title: localeString('restart.title'),
                             text: localeString(
@@ -662,11 +661,9 @@ export default class Wallet extends React.Component<WalletProps, WalletState> {
                             'Transient error during startup - attempting restart:',
                             errorMessage
                         );
-                        setConnectingStatus(false);
                         await new Promise((resolve) =>
                             setTimeout(resolve, 2000)
                         );
-                        setConnectingStatus(true);
                         this.getSettingsAndNavigate();
                         return;
                     }
