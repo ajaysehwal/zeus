@@ -1,4 +1,5 @@
 import Foundation
+import CommonCrypto
 import CashuDevKit
 import ZeusCashuRestore
 
@@ -76,14 +77,22 @@ class CashuDevKitModule: RCTEventEmitter {
         return wallet
     }
 
-    private func getDatabasePath() -> String {
+    private var currentDbPath: String?
+
+    private func getDatabasePath(for mnemonic: String) -> String {
         let paths = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)
         let appSupport = paths[0]
 
         // Ensure directory exists
         try? FileManager.default.createDirectory(at: appSupport, withIntermediateDirectories: true)
 
-        let dbPath = appSupport.appendingPathComponent("cashu_wallet.db")
+        // Hash the mnemonic to create a unique, deterministic filename per wallet
+        let data = Data(mnemonic.utf8)
+        var hash = [UInt8](repeating: 0, count: Int(CC_SHA256_DIGEST_LENGTH))
+        data.withUnsafeBytes { CC_SHA256($0.baseAddress, CC_LONG(data.count), &hash) }
+        let hashHex = hash.prefix(8).map { String(format: "%02x", $0) }.joined()
+
+        let dbPath = appSupport.appendingPathComponent("cashu_wallet_\(hashHex).db")
         return dbPath.path
     }
 
@@ -302,7 +311,7 @@ class CashuDevKitModule: RCTEventEmitter {
 
     @objc(getDatabasePath:rejecter:)
     func getDatabasePath(resolve: @escaping RCTPromiseResolveBlock, reject: @escaping RCTPromiseRejectBlock) {
-        resolve(getDatabasePath())
+        resolve(currentDbPath ?? "")
     }
 
     // MARK: - Wallet Management
@@ -313,7 +322,8 @@ class CashuDevKitModule: RCTEventEmitter {
                           reject: @escaping RCTPromiseRejectBlock) {
         Task {
             do {
-                let dbPath = getDatabasePath()
+                let dbPath = getDatabasePath(for: mnemonic)
+                self.currentDbPath = dbPath
                 let sqliteDb = try WalletSqliteDatabase(filePath: dbPath)
                 self.db = sqliteDb
 

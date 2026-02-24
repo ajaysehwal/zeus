@@ -8,6 +8,7 @@ import org.json.JSONObject
 import java.io.File
 import java.net.HttpURLConnection
 import java.net.URL
+import java.security.MessageDigest
 
 import org.cashudevkit.*
 import uniffi.zeus_cashu_restore.restoreFromSeed as zeusRestoreFromSeed
@@ -80,9 +81,15 @@ class CashuDevKitModule(private val reactContext: ReactApplicationContext) :
         return wallet
     }
 
-    private fun getDatabasePath(): String {
+    private var currentDbPath: String? = null
+
+    private fun getDatabasePath(mnemonic: String): String {
         val filesDir = reactContext.filesDir
-        return File(filesDir, "cashu_wallet.db").absolutePath
+        // Hash the mnemonic to create a unique, deterministic filename per wallet
+        val digest = MessageDigest.getInstance("SHA-256")
+        val hashBytes = digest.digest(mnemonic.toByteArray(Charsets.UTF_8))
+        val hashHex = hashBytes.take(8).joinToString("") { "%02x".format(it) }
+        return File(filesDir, "cashu_wallet_$hashHex.db").absolutePath
     }
 
     private fun parseCurrencyUnit(unit: String): CurrencyUnit {
@@ -242,7 +249,7 @@ class CashuDevKitModule(private val reactContext: ReactApplicationContext) :
 
     @ReactMethod
     fun getDatabasePath(promise: Promise) {
-        promise.resolve(getDatabasePath())
+        promise.resolve(currentDbPath ?: "")
     }
 
     // ========================================================================
@@ -253,7 +260,8 @@ class CashuDevKitModule(private val reactContext: ReactApplicationContext) :
     fun initializeWallet(mnemonic: String, unit: String, promise: Promise) {
         scope.launch {
             try {
-                val dbPath = getDatabasePath()
+                val dbPath = getDatabasePath(mnemonic)
+                currentDbPath = dbPath
                 val database = WalletSqliteDatabase(dbPath)
                 db = database
 
