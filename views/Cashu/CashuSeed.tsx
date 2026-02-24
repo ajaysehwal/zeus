@@ -185,7 +185,7 @@ export default class CashuSeed extends React.PureComponent<
                                             copyValue={seedPhrase.join(' ')}
                                             icon={{
                                                 name: 'warning',
-                                                size: 40
+                                                size: 25
                                             }}
                                         />
                                     </View>

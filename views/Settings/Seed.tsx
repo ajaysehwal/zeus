@@ -340,7 +340,7 @@ export default class Seed extends React.PureComponent<SeedProps, SeedState> {
                                             copyValue={seedPhrase.join(' ')}
                                             icon={{
                                                 name: 'warning',
-                                                size: 40
+                                                size: 25
                                             }}
                                         />
                                     </View>
