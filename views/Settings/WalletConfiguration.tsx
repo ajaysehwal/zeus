@@ -579,6 +579,8 @@ export default class WalletConfiguration extends React.Component<
             } else {
                 if (newEmbeddedLndWallet) {
                     navigation.popTo('Wallet');
+                } else if (this.state.newEntry) {
+                    navigation.navigate('Wallets');
                 } else {
                     navigation.goBack();
                 }
