@@ -36,6 +36,19 @@ import {
 
 import { lnrpc } from '../proto/lightning';
 
+// ---------------------------------------------------------------------------
+// Timing constants
+// ---------------------------------------------------------------------------
+const STATE_SUBSCRIPTION_SETTLE_MS = 500; // Delay to allow state subscription to settle after LND start
+const LISTENER_REGISTRATION_MS = 100; // Delay to allow event listener to fully register before subscribing
+const LND_RETRY_DELAY_MS = 3000; // Base delay between LND start retry attempts
+const ANDROID_PROCESS_CLEANUP_DELAY_MS = 4000; // Extra time Android needs for process cleanup (slower than iOS)
+const IOS_PROCESS_CLEANUP_DELAY_MS = 2000; // iOS process cleanup delay
+const GEN_SEED_STOP_DELAY_MS = 3000; // Delay after stopping LND before wallet creation restart attempts
+const STOP_LND_MAX_RETRIES = 10; // Stop LND: max polling attempts to verify shutdown
+const STOP_LND_POLL_DELAY_MS = 500; // Stop LND: delay between polling attempts (ms)
+const MAX_START_LND_RETRIES = 10; // Maximum start attempts for LND
+
 /**
  * LND error codes - use for consistent error handling across the app
  */
@@ -232,7 +245,6 @@ export function isLndError(error: unknown, code?: LndErrorCode): boolean {
 /** Android needs longer delays - process cleanup is slower */
 
 export const NEUTRINO_PING_TIMEOUT_MS = 1500;
-
 export const NEUTRINO_PING_OPTIMAL_MS = 200;
 export const NEUTRINO_PING_LAX_MS = 500;
 export const NEUTRINO_PING_THRESHOLD_MS = 1000;
@@ -410,12 +422,10 @@ const writeLndConfig = async ({
     await writeConfig({ lndDir, config });
 };
 
-export async function deleteLndWallet(lndDir: string, skipStopLnd = false) {
+export async function deleteLndWallet(lndDir: string) {
     log.d('Attempting to delete Embedded LND wallet');
     try {
-        if (!skipStopLnd) {
-            await stopLnd();
-        }
+        await stopLnd();
         await NativeModules.LndMobileTools.deleteLndDirectory(lndDir);
     } catch (error) {
         log.e('Embedded LND wallet deletion failed', [error]);
@@ -497,9 +507,15 @@ function getErrorMessage(error: unknown): string {
  * Stops the LND process gracefully with retry mechanism
  * @param maxRetries - Maximum number of polling attempts to verify shutdown (default: 10)
  * @param delayMs - Delay between polling attempts in milliseconds (default: 500)
+ * @param forceStop - If true, skip status check and always call stopDaemon. Use when Go layer
+ *   reports "already started" but Java checkStatus says not running (state mismatch).
  * @throws Error if LND fails to stop after max retries (unexpected errors only)
  */
-export async function stopLnd(maxRetries = 10, delayMs = 500) {
+export async function stopLnd(
+    maxRetries = STOP_LND_MAX_RETRIES,
+    delayMs = STOP_LND_POLL_DELAY_MS,
+    forceStop = false
+) {
     const { checkStatus, stopLnd } = lndMobile.index;
 
     const runWithExpectedErrorHandling = async <T>(
@@ -518,28 +534,34 @@ export async function stopLnd(maxRetries = 10, delayMs = 500) {
         }
     };
     try {
-        // Check if LND is currently running
-        const status = await runWithExpectedErrorHandling(
-            () => checkStatus(),
-            'checkStatus'
-        );
+        if (!forceStop) {
+            // Check if LND is currently running
+            const status = await runWithExpectedErrorHandling(
+                () => checkStatus(),
+                'checkStatus'
+            );
 
-        if (status === null) {
-            log.d('LND status check returned expected error - already stopped');
-            settingsStore.embeddedLndStarted = false;
-            return;
-        }
+            if (!status) {
+                log.d(
+                    'LND status check returned expected error - already stopped'
+                );
+                settingsStore.embeddedLndStarted = false;
+                return;
+            }
 
-        const isRunning =
-            (status & ELndMobileStatusCodes.STATUS_PROCESS_STARTED) ===
-            ELndMobileStatusCodes.STATUS_PROCESS_STARTED;
+            const isRunning =
+                (status & ELndMobileStatusCodes.STATUS_PROCESS_STARTED) ===
+                ELndMobileStatusCodes.STATUS_PROCESS_STARTED;
 
-        log.d(`LND running status: ${isRunning}`);
+            log.d(`LND running status: ${isRunning}`);
 
-        if (!isRunning) {
-            log.d('LND is not running, stop not required');
-            settingsStore.embeddedLndStarted = false;
-            return;
+            if (!isRunning) {
+                log.d('LND is not running, stop not required');
+                settingsStore.embeddedLndStarted = false;
+                return;
+            }
+        } else {
+            log.d('Force stop: skipping status check (Go state mismatch)');
         }
         // Initiate graceful shutdown - both can throw; continue even if one fails
         log.d('Stopping LND...');
@@ -660,7 +682,7 @@ export async function startLnd({
         unlockWallet
     });
     // Wait for state subscription to be ready
-    await sleep(500);
+    await sleep(STATE_SUBSCRIPTION_SETTLE_MS);
     await waitForLndReady({
         decodeState,
         subscribeState,
@@ -708,10 +730,13 @@ async function startLndWithRetry({
         if (
             matchesLndErrorCode(errorMessage, LndErrorCode.LND_ALREADY_RUNNING)
         ) {
-            await stopLnd();
-            log.d(
-                'LND already started (likely from wallet creation) - continuing...'
-            );
+            log.d('LND already started - force stop (Go thinks running)');
+            await stopLnd(STOP_LND_MAX_RETRIES, STOP_LND_POLL_DELAY_MS, true);
+            const delayMs =
+                Platform.OS === 'android'
+                    ? ANDROID_PROCESS_CLEANUP_DELAY_MS
+                    : IOS_PROCESS_CLEANUP_DELAY_MS;
+            await sleep(delayMs);
         }
 
         log.w('Error starting LND, attempting retry', [error]);
@@ -723,8 +748,6 @@ async function startLndWithRetry({
         });
     }
 }
-
-const MAX_START_LND_RETRIES = 10;
 
 async function retryStartLnd({
     startLnd,
@@ -749,7 +772,7 @@ async function retryStartLnd({
 }) {
     for (let attempt = 1; attempt <= MAX_START_LND_RETRIES; attempt++) {
         try {
-            await sleep(3000);
+            await sleep(LND_RETRY_DELAY_MS);
             await startLnd(startArgs);
             log.d('LND started successfully after retry');
             return;
@@ -770,6 +793,20 @@ async function retryStartLnd({
                     }
                 }
                 return;
+            }
+            if (matchesLndErrorCode(msg, LndErrorCode.LND_ALREADY_RUNNING)) {
+                log.d(`LND still running (attempt ${attempt}) - force stop`);
+                await stopLnd(
+                    STOP_LND_MAX_RETRIES,
+                    STOP_LND_POLL_DELAY_MS,
+                    true
+                );
+                await sleep(
+                    Platform.OS === 'android'
+                        ? ANDROID_PROCESS_CLEANUP_DELAY_MS
+                        : IOS_PROCESS_CLEANUP_DELAY_MS
+                );
+                continue;
             }
 
             log.w(`Retry attempt ${attempt}/${MAX_START_LND_RETRIES} failed`, [
@@ -838,7 +875,7 @@ async function waitForLndReady({
                         log.d('Wallet does not exist - ready for creation');
                         isResolved = true;
                         cleanup();
-                        await sleep(500);
+                        await sleep(STATE_SUBSCRIPTION_SETTLE_MS);
                         resolve(true);
                         break;
 
@@ -940,7 +977,7 @@ async function waitForLndReady({
         LndMobileEventEmitter.addListener('SubscribeState', stateHandler);
 
         // Give the listener time to fully register
-        await sleep(100);
+        await sleep(LISTENER_REGISTRATION_MS);
 
         try {
             log.d('Starting state subscription');
@@ -1138,8 +1175,6 @@ export async function optimizeNeutrinoPeers(
 
     return;
 }
-
-const GEN_SEED_STOP_DELAY_MS = 3000;
 /**
  * Stops LND, waits for process to fully terminate, then starts fresh.
  * Used when genSeed fails due to "unlocked too quickly" - we need a clean restart.
@@ -1244,7 +1279,6 @@ export async function createLndWallet({
     isTestnet?: boolean;
     channelBackupsBase64?: string;
 }) {
-    console.log('creating new LND');
     const {
         initialize,
         createIOSApplicationSupportAndLndDirectories,

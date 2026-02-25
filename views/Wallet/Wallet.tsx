@@ -638,20 +638,9 @@ export default class Wallet extends React.Component<WalletProps, WalletState> {
                         return;
                     }
 
-                    // Handle LND start failed after max retries - show restart modal
+                    // Handle LND start failed after max retries - restart app
                     if (isLndError(error, LndErrorCode.LND_START_FAILED)) {
-                        this.props.ModalStore.toggleInfoModal({
-                            title: localeString('restart.title'),
-                            text: localeString(
-                                'views.Wallet.lndStartFailed.message'
-                            ),
-                            buttons: [
-                                {
-                                    title: localeString('views.Wallet.restart'),
-                                    callback: () => restartNeeded(true)
-                                }
-                            ]
-                        });
+                        restartNeeded(true);
                         return;
                     }
 
