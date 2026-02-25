@@ -759,19 +759,6 @@ export default class WalletConfiguration extends React.Component<
         const { SettingsStore, SyncStore } = this.props;
         const { embeddedLndStarted } = SettingsStore;
 
-        if (SyncStore.isSyncing) {
-            Alert.alert(
-                localeString(
-                    'views.Settings.WalletConfiguration.syncingWalletCreateBlocked.title'
-                ),
-                localeString(
-                    'views.Settings.WalletConfiguration.syncingWalletCreateBlocked.message'
-                ),
-                [{ text: localeString('general.ok') }]
-            );
-            return;
-        }
-
         this.setState({
             creatingWallet: true,
             errorCreatingWallet: false
