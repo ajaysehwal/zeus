@@ -35,12 +35,27 @@ export default function OnchainFeeInput(props: OnchainFeeInputProps) {
 
     useEffect(() => {
         if (enableMempoolRates) {
+            const hasValidFee = fee && Number(fee) > 0;
+            if (hasValidFee) {
+                setNewFee(fee);
+                onChangeFee(fee);
+                setLoading(false);
+                return;
+            }
             setLoading(true);
             feeStore
                 .getOnchainFeesviaMempool()
                 .then((recommendedFees) => {
-                    setNewFee(recommendedFees[preferredMempoolRate]);
-                    onChangeFee(recommendedFees[preferredMempoolRate]);
+                    const recommended =
+                        recommendedFees?.[preferredMempoolRate] ??
+                        recommendedFees?.fastestFee ??
+                        '';
+                    const feeStr =
+                        recommended !== '' && recommended != null
+                            ? String(recommended)
+                            : '';
+                    setNewFee(feeStr);
+                    onChangeFee(feeStr);
                     setLoading(false);
                 })
                 .catch(() => {

@@ -24,7 +24,8 @@ import { nodeInfoStore, settingsStore } from '../../stores/Stores';
 interface PaymentMethodListProps {
     navigation: StackNavigationProp<any, any>;
     value?: string;
-    satAmount?: number;
+    satAmount?: number | string;
+    feeRate?: string;
     lightning?: string;
     lightningAddress?: string;
     ecash?: string;
@@ -55,12 +56,21 @@ type DataRow = {
     satAmount?: number;
 };
 
+const hasInsufficientBalance = (
+    balance: number | string | undefined,
+    satAmount: number | undefined
+) =>
+    Number(balance) === 0 ||
+    (satAmount !== undefined && satAmount > Number(balance));
+
 const Row = ({ item }: { item: DataRow }) => {
-    const hasInsufficientBalance =
-        Number(item.balance) === 0 ||
-        (item.satAmount !== undefined && Number(item.balance) < item.satAmount);
+    const insufficient = hasInsufficientBalance(item.balance, item.satAmount);
     return (
-        <RectButton>
+        <RectButton
+            style={{
+                opacity: item.disabled ? 0.5 : 1
+            }}
+        >
             <LinearGradient
                 colors={
                     themeColor('buttonGradient')
@@ -140,7 +150,7 @@ const Row = ({ item }: { item: DataRow }) => {
                             sats={item.balance}
                             sensitive
                             colorOverride={
-                                hasInsufficientBalance
+                                insufficient
                                     ? themeColor('error')
                                     : themeColor('buttonText')
                             }
@@ -157,6 +167,7 @@ const SwipeableRow = ({
     navigation,
     value,
     satAmount,
+    feeRate,
     lightning,
     lightningAddress,
     offer,
@@ -167,11 +178,14 @@ const SwipeableRow = ({
     navigation: StackNavigationProp<any, any>;
     value?: string;
     satAmount?: number;
+    feeRate?: string;
     lightning?: string;
     lightningAddress?: string;
     offer?: string;
     lnurlParams?: LNURLWithdrawParams | undefined;
 }) => {
+    const insufficient = hasInsufficientBalance(item.balance, item.satAmount);
+    const rowDisabled = item.disabled || insufficient;
     if (item.layer === 'Lightning') {
         return (
             <LightningSwipeableRow
@@ -179,7 +193,7 @@ const SwipeableRow = ({
                 lightning={lightning}
                 locked={true}
                 lnurlParams={lnurlParams}
-                disabled={item.disabled}
+                disabled={rowDisabled}
             >
                 <Row item={item} />
             </LightningSwipeableRow>
@@ -192,7 +206,7 @@ const SwipeableRow = ({
                 navigation={navigation}
                 lightningAddress={lightningAddress}
                 locked={true}
-                disabled={item.disabled}
+                disabled={rowDisabled}
             >
                 <Row item={item} />
             </LightningSwipeableRow>
@@ -206,7 +220,7 @@ const SwipeableRow = ({
                 lightning={lightning}
                 locked={true}
                 lnurlParams={lnurlParams}
-                disabled={item.disabled}
+                disabled={rowDisabled}
             >
                 <Row item={item} />
             </EcashSwipeableRow>
@@ -219,7 +233,7 @@ const SwipeableRow = ({
                 navigation={navigation}
                 offer={offer}
                 locked={true}
-                disabled={item.disabled}
+                disabled={rowDisabled}
             >
                 <Row item={item} />
             </LightningSwipeableRow>
@@ -232,9 +246,10 @@ const SwipeableRow = ({
                 navigation={navigation}
                 value={value}
                 satAmount={satAmount}
+                feeRate={feeRate}
                 locked={true}
                 hidden={item.hidden}
-                disabled={item.disabled}
+                disabled={rowDisabled}
                 account={item.account}
             >
                 <Row item={item} />
@@ -252,6 +267,7 @@ export default class PaymentMethodList extends Component<
             navigation,
             value,
             satAmount,
+            feeRate,
             lightning,
             lightningAddress,
             offer,
@@ -262,18 +278,17 @@ export default class PaymentMethodList extends Component<
             accounts
         } = this.props;
         let DATA: DataRow[] = [];
-
-        const isDisabled = (balance: number | string | undefined) =>
-            Number(balance) === 0 ||
-            (satAmount !== undefined && satAmount > Number(balance));
-
+        const satAmountNum =
+            satAmount !== undefined && !isNaN(Number(satAmount))
+                ? Number(satAmount)
+                : undefined;
         if (lightning || lnurlParams) {
             DATA.push({
                 layer: 'Lightning',
                 subtitle: lightning ?? lnurlParams?.tag,
                 balance: lightningBalance,
-                disabled: isDisabled(lightningBalance),
-                satAmount
+                disabled: false,
+                satAmount: satAmountNum
             });
         }
 
@@ -286,8 +301,8 @@ export default class PaymentMethodList extends Component<
                 layer: 'Lightning via ecash',
                 subtitle: lightning ?? lnurlParams?.tag,
                 balance: ecashBalance,
-                disabled: isDisabled(ecashBalance),
-                satAmount
+                disabled: false,
+                satAmount: satAmountNum
             });
         }
 
@@ -296,8 +311,8 @@ export default class PaymentMethodList extends Component<
                 layer: 'Lightning address',
                 subtitle: lightningAddress,
                 balance: lightningBalance,
-                disabled: isDisabled(lightningBalance),
-                satAmount
+                disabled: false,
+                satAmount: satAmountNum
             });
         }
 
@@ -305,11 +320,9 @@ export default class PaymentMethodList extends Component<
             DATA.push({
                 layer: 'Offer',
                 subtitle: offer,
-                disabled:
-                    !nodeInfoStore.supportsOffers ||
-                    isDisabled(lightningBalance),
+                disabled: !nodeInfoStore.supportsOffers,
                 balance: lightningBalance,
-                satAmount
+                satAmount: satAmountNum
             });
         }
 
@@ -318,12 +331,10 @@ export default class PaymentMethodList extends Component<
             DATA.push({
                 layer: 'On-chain',
                 subtitle: value,
-                disabled:
-                    !BackendUtils.supportsOnchainSends() ||
-                    isDisabled(onchainBalance),
+                disabled: !BackendUtils.supportsOnchainSends(),
                 balance: onchainBalance,
                 account: 'default',
-                satAmount
+                satAmount: satAmountNum
             });
 
             if (accounts && accounts.length > 0) {
@@ -332,11 +343,11 @@ export default class PaymentMethodList extends Component<
                         DATA.push({
                             layer: account.name,
                             subtitle: value ?? account.XFP,
-                            disabled: isDisabled(account.balance),
+                            disabled: false,
                             balance: account.balance,
                             account: account.name,
                             hidden: account.hidden,
-                            satAmount
+                            satAmount: satAmountNum
                         });
                     }
                 });
@@ -357,7 +368,8 @@ export default class PaymentMethodList extends Component<
                             navigation={navigation}
                             // select pay method vars
                             value={value}
-                            satAmount={satAmount}
+                            satAmount={satAmountNum}
+                            feeRate={feeRate}
                             lightning={lightning}
                             lightningAddress={lightningAddress}
                             offer={offer}

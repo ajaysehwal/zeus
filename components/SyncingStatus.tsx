@@ -1,5 +1,7 @@
 import * as React from 'react';
+import { StyleProp, ViewStyle } from 'react-native';
 import { inject, observer } from 'mobx-react';
+import { ParamListBase } from '@react-navigation/native';
 import { StackNavigationProp } from '@react-navigation/stack';
 
 import SyncStore from '../stores/SyncStore';
@@ -8,9 +10,9 @@ import { localeString } from '../utils/LocaleUtils';
 import { themeColor } from '../utils/ThemeUtils';
 
 interface SyncingStatusProps {
-    navigation: StackNavigationProp<any, any>;
+    navigation: StackNavigationProp<ParamListBase>;
     SyncStore?: SyncStore;
-    style?: any;
+    style?: StyleProp<ViewStyle>;
 }
 
 @inject('SyncStore')

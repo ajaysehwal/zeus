@@ -1,5 +1,11 @@
 import * as React from 'react';
-import { Text, View, TouchableOpacity } from 'react-native';
+import {
+    StyleProp,
+    Text,
+    TouchableOpacity,
+    View,
+    ViewStyle
+} from 'react-native';
 import { LinearProgress } from '@rneui/themed';
 
 import { themeColor } from '../utils/ThemeUtils';
@@ -12,7 +18,7 @@ interface StatusCardProps {
     backgroundColor?: string;
     textColor?: string;
     progressColor?: string;
-    style?: any;
+    style?: StyleProp<ViewStyle>;
 }
 
 export default function StatusCard({

@@ -85,6 +85,7 @@ interface SendProps {
         {
             destination: string;
             satAmount: string;
+            fee: string;
             transactionType: string | null;
             bolt12: string | null;
             isValid: boolean;
@@ -146,6 +147,7 @@ export default class Send extends React.Component<SendProps, SendState> {
         const {
             destination,
             satAmount,
+            fee,
             transactionType,
             isValid,
             contactName,
@@ -172,7 +174,7 @@ export default class Send extends React.Component<SendProps, SendState> {
             destination: destination || '',
             amount: amount || '',
             satAmount: satAmount || '0',
-            fee: '',
+            fee: fee || '',
             utxos: [],
             utxoBalance: 0,
             error_msg: '',
@@ -202,6 +204,7 @@ export default class Send extends React.Component<SendProps, SendState> {
                 destination,
                 bolt12,
                 satAmount,
+                fee,
                 transactionType,
                 contactName
             } = route.params ?? {};
@@ -222,6 +225,9 @@ export default class Send extends React.Component<SendProps, SendState> {
                 const amount = getAmountFromSats(satAmount) || satAmount;
                 stateUpdate.amount = amount;
                 stateUpdate.satAmount = satAmount;
+            }
+            if (fee) {
+                stateUpdate.fee = fee;
             }
             this.setState(stateUpdate as SendState);
         }

@@ -20,6 +20,7 @@ import BalanceStore from '../stores/BalanceStore';
 import CashuStore from '../stores/CashuStore';
 import UTXOsStore from '../stores/UTXOsStore';
 import InvoicesStore from '../stores/InvoicesStore';
+
 import { feeStore, settingsStore } from '../stores/Stores';
 
 import { localeString } from '../utils/LocaleUtils';
@@ -63,6 +64,8 @@ export default class ChoosePaymentMethod extends React.Component<
     ChoosePaymentMethodState
 > {
     private focusUnsubscribe?: () => void;
+    private blurUnsubscribe?: () => void;
+    private hasNavigatedAway = false;
 
     state = {
         value: '',
@@ -71,10 +74,10 @@ export default class ChoosePaymentMethod extends React.Component<
         lightningAddress: '',
         offer: '',
         lnurlParams: undefined,
-        feeRate: '10'
+        feeRate: ''
     };
 
-    async componentDidMount() {
+    componentDidMount() {
         const { route, navigation } = this.props;
         const params = route.params ?? {};
         const {
@@ -100,7 +103,9 @@ export default class ChoosePaymentMethod extends React.Component<
 
         const stateUpdate: Partial<ChoosePaymentMethodState> = {};
         if (value) stateUpdate.value = value;
-        if (resolvedSatAmount) stateUpdate.satAmount = resolvedSatAmount;
+        if (resolvedSatAmount && resolvedSatAmount !== '0') {
+            stateUpdate.satAmount = resolvedSatAmount;
+        }
         if (lightning) stateUpdate.lightning = lightning;
         if (lightningAddress) stateUpdate.lightningAddress = lightningAddress;
         if (offer) stateUpdate.offer = offer;
@@ -111,33 +116,37 @@ export default class ChoosePaymentMethod extends React.Component<
         }
 
         this.fetchFeeEstimates({ lightning, lnurlParams });
+        this.fetchOnchainFees(value);
 
-        if (
-            value &&
-            BackendUtils.supportsOnchainReceiving() &&
-            settingsStore?.settings?.privacy?.enableMempoolRates
-        ) {
-            const preferredRate =
-                settingsStore.settings?.payments?.preferredMempoolRate ||
-                'fastestFee';
-            feeStore.getOnchainFeesviaMempool().then((fees) => {
-                const rate = fees?.[preferredRate];
-                if (rate != null) {
-                    this.setState({ feeRate: String(rate) });
-                }
-            });
-        }
-
+        this.blurUnsubscribe = navigation.addListener('blur', () => {
+            this.hasNavigatedAway = true;
+        });
         this.focusUnsubscribe = navigation.addListener('focus', () => {
-            this.fetchFeeEstimates();
+            if (!this.hasNavigatedAway) return;
+            this.hasNavigatedAway = false;
+            this.fetchFeeEstimates({
+                lightning: this.state.lightning,
+                lnurlParams: this.state.lnurlParams
+            });
+            this.fetchOnchainFees(this.state.value);
         });
     }
 
     componentWillUnmount() {
-        if (this.focusUnsubscribe) {
-            this.focusUnsubscribe();
-        }
+        this.focusUnsubscribe?.();
+        this.blurUnsubscribe?.();
     }
+
+    fetchOnchainFees = (value?: string) => {
+        if (
+            !value ||
+            !BackendUtils.supportsOnchainReceiving() ||
+            !settingsStore?.settings?.privacy?.enableMempoolRates
+        ) {
+            return;
+        }
+        feeStore.getOnchainFeesviaMempool();
+    };
 
     fetchFeeEstimates = async (override?: {
         lightning?: string;
@@ -215,28 +224,19 @@ export default class ChoosePaymentMethod extends React.Component<
     };
 
     render() {
-        const {
-            navigation,
-            BalanceStore,
-            CashuStore,
-            UTXOsStore,
-            InvoicesStore
-        } = this.props;
+        const { navigation, BalanceStore, CashuStore, UTXOsStore } = this.props;
         const {
             value,
             satAmount,
             lightning,
             lightningAddress,
             offer,
-            lnurlParams,
-            feeRate
+            lnurlParams
         } = this.state;
 
         const { accounts } = UTXOsStore!;
         const { totalBlockchainBalance, lightningBalance } = BalanceStore!;
         const { totalBalanceSats } = CashuStore!;
-        const { feeEstimate: lightningEstimateFee } = InvoicesStore!;
-        const { feeEstimate: ecashEstimateFee } = CashuStore!;
         const hasInsufficientFunds = this.hasInsufficientFunds();
 
         const isLightningPayment =
@@ -295,11 +295,8 @@ export default class ChoosePaymentMethod extends React.Component<
                     navigation={navigation}
                     // for payment method selection
                     value={value}
-                    satAmount={
-                        satAmount && !isNaN(Number(satAmount))
-                            ? Number(satAmount)
-                            : undefined
-                    }
+                    satAmount={satAmount}
+                    feeRate={this.state.feeRate}
                     lightning={lightning}
                     lightningAddress={lightningAddress}
                     offer={offer}
@@ -315,19 +312,16 @@ export default class ChoosePaymentMethod extends React.Component<
                     satAmount={satAmount}
                     lightning={lightning}
                     lnurlParams={lnurlParams}
-                    lightningEstimateFee={lightningEstimateFee ?? 0}
-                    ecashEstimateFee={ecashEstimateFee ?? 0}
                     visible={showFees && !hasInsufficientFunds}
                     showOnchainFeeInput={
                         !!value &&
                         BackendUtils.supportsOnchainReceiving() &&
                         !hasInsufficientFunds &&
-                        showFees
+                        showFees &&
+                        !!settingsStore?.settings?.privacy?.enableMempoolRates
                     }
-                    feeRate={feeRate}
-                    onChangeFee={(text: string) =>
-                        this.setState({ feeRate: text })
-                    }
+                    feeRate={this.state.feeRate}
+                    onFeeChange={(fee) => this.setState({ feeRate: fee })}
                     navigation={navigation}
                 />
             </Screen>
