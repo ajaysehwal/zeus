@@ -28,19 +28,18 @@ import { themeColor } from '../utils/ThemeUtils';
 import BackendUtils from '../utils/BackendUtils';
 import Invoice from '../models/Invoice';
 
+interface RouteParams {
+    value: string;
+    satAmount: string;
+    lightning: string;
+    lightningAddress: string;
+    offer: string;
+    lnurlParams: LNURLWithdrawParams | undefined;
+}
+
 interface ChoosePaymentMethodProps {
     navigation: StackNavigationProp<any, any>;
-    route: Route<
-        'ChoosePaymentMethod',
-        {
-            value: string;
-            satAmount: string;
-            lightning: string;
-            lightningAddress: string;
-            offer: string;
-            lnurlParams: LNURLWithdrawParams | undefined;
-        }
-    >;
+    route: Route<'ChoosePaymentMethod', RouteParams>;
     BalanceStore?: BalanceStore;
     CashuStore?: CashuStore;
     UTXOsStore?: UTXOsStore;
@@ -80,55 +79,19 @@ export default class ChoosePaymentMethod extends React.Component<
     componentDidMount() {
         const { route, navigation } = this.props;
         const params = route.params ?? {};
-        const {
-            value,
-            satAmount,
-            lightning,
-            lightningAddress,
-            offer,
-            lnurlParams
-        } = params;
-
-        let resolvedSatAmount = satAmount;
-        if (!satAmount && lightning) {
-            try {
-                const decoded = bolt11.decode(lightning);
-                const invoice = new Invoice(decoded);
-                resolvedSatAmount =
-                    invoice?.getRequestAmount?.toString() ?? undefined;
-            } catch (error) {
-                console.log('Error decoding invoice for amount:', error);
-            }
-        }
-
-        const stateUpdate: Partial<ChoosePaymentMethodState> = {};
-        if (value) stateUpdate.value = value;
-        if (resolvedSatAmount && resolvedSatAmount !== '0') {
-            stateUpdate.satAmount = resolvedSatAmount;
-        }
-        if (lightning) stateUpdate.lightning = lightning;
-        if (lightningAddress) stateUpdate.lightningAddress = lightningAddress;
-        if (offer) stateUpdate.offer = offer;
-        if (lnurlParams) stateUpdate.lnurlParams = lnurlParams;
-
-        if (Object.keys(stateUpdate).length > 0) {
-            this.setState((prev) => ({ ...prev, ...stateUpdate }));
-        }
-
-        this.fetchFeeEstimates({ lightning, lnurlParams });
-        this.fetchOnchainFees(value);
-
+        this.initFromParams(params);
         this.blurUnsubscribe = navigation.addListener('blur', () => {
             this.hasNavigatedAway = true;
         });
         this.focusUnsubscribe = navigation.addListener('focus', () => {
             if (!this.hasNavigatedAway) return;
             this.hasNavigatedAway = false;
+            const { lightning, lnurlParams, value } = this.state;
             this.fetchFeeEstimates({
-                lightning: this.state.lightning,
-                lnurlParams: this.state.lnurlParams
+                lightning,
+                lnurlParams
             });
-            this.fetchOnchainFees(this.state.value);
+            this.fetchOnchainFees(value);
         });
     }
 
@@ -137,6 +100,47 @@ export default class ChoosePaymentMethod extends React.Component<
         this.blurUnsubscribe?.();
     }
 
+    private decodeSatAmount(lightning: string): string | undefined {
+        try {
+            const decoded = bolt11.decode(lightning);
+            const invoice = new Invoice(decoded);
+            return invoice?.getRequestAmount?.toString() ?? undefined;
+        } catch {
+            return undefined;
+        }
+    }
+
+    private initFromParams(params: Partial<RouteParams>) {
+        const {
+            value,
+            satAmount,
+            lightning,
+            lightningAddress,
+            offer,
+            lnurlParams
+        } = params ?? {};
+
+        const resolvedSatAmount =
+            !satAmount && lightning
+                ? this.decodeSatAmount(lightning)
+                : satAmount;
+
+        const stateUpdate: Partial<ChoosePaymentMethodState> = {
+            ...(value && { value }),
+            ...(resolvedSatAmount &&
+                resolvedSatAmount !== '0' && { satAmount: resolvedSatAmount }),
+            ...(lightning && { lightning }),
+            ...(lightningAddress && { lightningAddress }),
+            ...(offer && { offer }),
+            ...(lnurlParams && { lnurlParams })
+        };
+        if (Object.keys(stateUpdate).length > 0) {
+            this.setState((prev) => ({ ...prev, ...stateUpdate }));
+        }
+
+        this.fetchFeeEstimates({ lightning, lnurlParams });
+        this.fetchOnchainFees(value);
+    }
     fetchOnchainFees = (value?: string) => {
         if (
             !value ||
@@ -148,28 +152,21 @@ export default class ChoosePaymentMethod extends React.Component<
         feeStore.getOnchainFeesviaMempool();
     };
 
-    fetchFeeEstimates = async (override?: {
+    private fetchFeeEstimates = async (override?: {
         lightning?: string;
         lnurlParams?: LNURLWithdrawParams;
     }) => {
         const lightning = override?.lightning ?? this.state.lightning;
         const { InvoicesStore, CashuStore } = this.props;
-
-        if (lightning && InvoicesStore) {
-            try {
-                await InvoicesStore.getPayReq(lightning);
-                // InvoicesStore automatically calls getRoutes via reaction when pay_req is set
-            } catch (error) {
-                console.log('Error fetching Lightning payment request:', error);
-            }
+        if (!lightning) return;
+        const tasks: Promise<void>[] = [];
+        if (InvoicesStore) {
+            tasks.push(InvoicesStore.getPayReq(lightning).catch(() => {}));
         }
-        if (lightning && BackendUtils.supportsCashuWallet() && CashuStore) {
-            try {
-                await CashuStore.getPayReq(lightning);
-            } catch (error) {
-                console.log('Error fetching eCash payment request:', error);
-            }
+        if (BackendUtils.supportsCashuWallet() && CashuStore) {
+            tasks.push(CashuStore.getPayReq(lightning).catch(() => {}));
         }
+        await Promise.all(tasks);
     };
 
     hasInsufficientFunds = () => {
@@ -180,47 +177,39 @@ export default class ChoosePaymentMethod extends React.Component<
             this.state;
         const satAmount = Number(this.state.satAmount);
 
-        const totalBalance =
-            Number(totalBlockchainBalance) +
-            Number(lightningBalance) +
-            Number(ecashBalance);
+        const onchain = Number(totalBlockchainBalance);
+        const lightning_ = Number(lightningBalance);
+        const ecash = Number(ecashBalance);
+        const total = onchain + lightning_ + ecash;
 
-        if (totalBalance === 0) return true;
+        if (total === 0) return true;
         if (isNaN(satAmount) || satAmount <= 0) return false;
 
-        const hasOnchain = Number(totalBlockchainBalance) >= satAmount;
-        const hasLightning = Number(lightningBalance) >= satAmount;
-        const hasEcash = Number(ecashBalance) >= satAmount;
+        const hasOnchain = onchain >= satAmount;
+        const hasLightning = lightning_ >= satAmount;
+        const hasEcash = ecash >= satAmount;
 
-        const isLightningOnly =
-            !value &&
-            (!!lightning || !!lnurlParams || !!lightningAddress || !!offer);
-        const isOnchainOnly =
-            !!value &&
-            !lightning &&
-            !lnurlParams &&
-            !lightningAddress &&
-            !offer &&
-            BackendUtils.supportsOnchainReceiving();
-        const supportsAllThree =
-            !!value &&
-            (!!lightning || !!lnurlParams || !!lightningAddress || !!offer) &&
-            BackendUtils.supportsOnchainReceiving() &&
-            BackendUtils.supportsCashuWallet();
+        const hasLightningPayment = !!(
+            lightning ||
+            lnurlParams ||
+            lightningAddress ||
+            offer
+        );
+        const hasOnchainPayment =
+            !!value && BackendUtils.supportsOnchainReceiving();
 
-        if (isLightningOnly) {
-            return !hasLightning && !hasEcash;
-        }
+        if (!value && hasLightningPayment) return !hasLightning && !hasEcash;
+        if (hasOnchainPayment && !hasLightningPayment) return !hasOnchain;
 
-        if (isOnchainOnly) {
-            return !hasOnchain;
-        }
-
-        if (supportsAllThree) {
+        if (
+            hasOnchainPayment &&
+            hasLightningPayment &&
+            BackendUtils.supportsCashuWallet()
+        ) {
             return !hasOnchain && !hasLightning && !hasEcash;
         }
 
-        return totalBalance < satAmount;
+        return total < satAmount;
     };
 
     render() {
@@ -231,20 +220,30 @@ export default class ChoosePaymentMethod extends React.Component<
             lightning,
             lightningAddress,
             offer,
-            lnurlParams
+            lnurlParams,
+            feeRate
         } = this.state;
 
         const { accounts } = UTXOsStore!;
         const { totalBlockchainBalance, lightningBalance } = BalanceStore!;
         const { totalBalanceSats } = CashuStore!;
-        const hasInsufficientFunds = this.hasInsufficientFunds();
 
-        const isLightningPayment =
-            lightning || lnurlParams || lightningAddress || offer;
-        const isOnchainPayment =
+        const hasInsufficientFunds = this.hasInsufficientFunds();
+        const hasLightningPayment = !!(
+            lightning ||
+            lnurlParams ||
+            lightningAddress ||
+            offer
+        );
+        const hasOnchainPayment =
             !!value && BackendUtils.supportsOnchainReceiving();
         const showFees =
-            !!satAmount && (isLightningPayment || isOnchainPayment);
+            !!satAmount && (hasLightningPayment || hasOnchainPayment);
+        const showOnchainFeeInput =
+            hasOnchainPayment &&
+            !hasInsufficientFunds &&
+            showFees &&
+            !!settingsStore?.settings?.privacy?.enableMempoolRates;
 
         return (
             <Screen>
@@ -313,14 +312,8 @@ export default class ChoosePaymentMethod extends React.Component<
                     lightning={lightning}
                     lnurlParams={lnurlParams}
                     visible={showFees && !hasInsufficientFunds}
-                    showOnchainFeeInput={
-                        !!value &&
-                        BackendUtils.supportsOnchainReceiving() &&
-                        !hasInsufficientFunds &&
-                        showFees &&
-                        !!settingsStore?.settings?.privacy?.enableMempoolRates
-                    }
-                    feeRate={this.state.feeRate}
+                    showOnchainFeeInput={showOnchainFeeInput}
+                    feeRate={feeRate}
                     onFeeChange={(fee) => this.setState({ feeRate: fee })}
                     navigation={navigation}
                 />

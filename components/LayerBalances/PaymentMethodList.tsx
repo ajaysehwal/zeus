@@ -56,6 +56,29 @@ type DataRow = {
     satAmount?: number;
 };
 
+const LAYER_LOCALE_MAP: Record<string, string> = {
+    Lightning: 'general.lightning',
+    'Lightning via ecash': 'components.LayerBalances.lightningViaEcash',
+    'Lightning address': 'general.lightningAddress',
+    Offer: 'views.Settings.Bolt12Offer',
+    'On-chain': 'general.onchain'
+};
+
+const getGradientColors = (): [string, string] => {
+    const gradient = themeColor('buttonGradient');
+    if (gradient) return gradient;
+    const bg = themeColor('buttonBackground') ?? themeColor('secondary');
+    return [bg, bg];
+};
+
+const LayerIcon = ({ layer }: { layer: string }) => {
+    if (layer === 'Lightning via ecash') return <EcashSvg />;
+    if (layer === 'On-chain') return <OnChainSvg />;
+    if (['Lightning', 'Lightning address', 'Offer'].includes(layer))
+        return <LightningSvg />;
+    return <OnChainSvg />;
+};
+
 const hasInsufficientBalance = (
     balance: number | string | undefined,
     satAmount: number | undefined
@@ -65,6 +88,9 @@ const hasInsufficientBalance = (
 
 const Row = ({ item }: { item: DataRow }) => {
     const insufficient = hasInsufficientBalance(item.balance, item.satAmount);
+    const layerLabel = LAYER_LOCALE_MAP[item.layer]
+        ? localeString(LAYER_LOCALE_MAP[item.layer])
+        : item.layer;
     return (
         <RectButton
             style={{
@@ -72,30 +98,11 @@ const Row = ({ item }: { item: DataRow }) => {
             }}
         >
             <LinearGradient
-                colors={
-                    themeColor('buttonGradient')
-                        ? themeColor('buttonGradient')
-                        : themeColor('buttonBackground')
-                        ? [
-                              themeColor('buttonBackground'),
-                              themeColor('buttonBackground')
-                          ]
-                        : [themeColor('secondary'), themeColor('secondary')]
-                }
+                colors={getGradientColors()}
                 style={styles.rectButton}
             >
                 <View style={styles.left}>
-                    {item.layer === 'On-chain' ? (
-                        <OnChainSvg />
-                    ) : item.layer === 'Lightning' ||
-                      item.layer === 'Lightning address' ||
-                      item.layer === 'Offer' ? (
-                        <LightningSvg />
-                    ) : item.layer === 'Lightning via ecash' ? (
-                        <EcashSvg />
-                    ) : (
-                        <OnChainSvg />
-                    )}
+                    <LayerIcon layer={item.layer} />
                     <Spacer width={5} />
                     <View
                         style={{
@@ -111,19 +118,7 @@ const Row = ({ item }: { item: DataRow }) => {
                                     themeColor('text')
                             }}
                         >
-                            {item.layer === 'Lightning'
-                                ? localeString('general.lightning')
-                                : item.layer === 'Lightning via ecash'
-                                ? localeString(
-                                      'components.LayerBalances.lightningViaEcash'
-                                  )
-                                : item.layer === 'Lightning address'
-                                ? localeString('general.lightningAddress')
-                                : item.layer === 'Offer'
-                                ? localeString('views.Settings.Bolt12Offer')
-                                : item.layer === 'On-chain'
-                                ? localeString('general.onchain')
-                                : item.layer}
+                            {layerLabel}
                         </Text>
                         {item.subtitle && (
                             <Text
@@ -262,12 +257,9 @@ export default class PaymentMethodList extends Component<
     PaymentMethodListProps,
     {}
 > {
-    render() {
+    private buildData = (satAmount: number | undefined): DataRow[] => {
         const {
-            navigation,
             value,
-            satAmount,
-            feeRate,
             lightning,
             lightningAddress,
             offer,
@@ -278,32 +270,28 @@ export default class PaymentMethodList extends Component<
             accounts
         } = this.props;
         let DATA: DataRow[] = [];
-        const satAmountNum =
-            satAmount !== undefined && !isNaN(Number(satAmount))
-                ? Number(satAmount)
-                : undefined;
+
         if (lightning || lnurlParams) {
             DATA.push({
                 layer: 'Lightning',
                 subtitle: lightning ?? lnurlParams?.tag,
                 balance: lightningBalance,
                 disabled: false,
-                satAmount: satAmountNum
+                satAmount
             });
-        }
 
-        if (
-            (lightning || lnurlParams) &&
-            BackendUtils.supportsCashuWallet() &&
-            settingsStore?.settings?.ecash?.enableCashu
-        ) {
-            DATA.push({
-                layer: 'Lightning via ecash',
-                subtitle: lightning ?? lnurlParams?.tag,
-                balance: ecashBalance,
-                disabled: false,
-                satAmount: satAmountNum
-            });
+            if (
+                BackendUtils.supportsCashuWallet() &&
+                settingsStore?.settings?.ecash?.enableCashu
+            ) {
+                DATA.push({
+                    layer: 'Lightning via ecash',
+                    subtitle: lightning ?? lnurlParams?.tag,
+                    balance: ecashBalance,
+                    disabled: false,
+                    satAmount
+                });
+            }
         }
 
         if (lightningAddress) {
@@ -312,7 +300,7 @@ export default class PaymentMethodList extends Component<
                 subtitle: lightningAddress,
                 balance: lightningBalance,
                 disabled: false,
-                satAmount: satAmountNum
+                satAmount
             });
         }
 
@@ -322,7 +310,7 @@ export default class PaymentMethodList extends Component<
                 subtitle: offer,
                 disabled: !nodeInfoStore.supportsOffers,
                 balance: lightningBalance,
-                satAmount: satAmountNum
+                satAmount
             });
         }
 
@@ -334,7 +322,7 @@ export default class PaymentMethodList extends Component<
                 disabled: !BackendUtils.supportsOnchainSends(),
                 balance: onchainBalance,
                 account: 'default',
-                satAmount: satAmountNum
+                satAmount
             });
 
             if (accounts && accounts.length > 0) {
@@ -347,12 +335,31 @@ export default class PaymentMethodList extends Component<
                             balance: account.balance,
                             account: account.name,
                             hidden: account.hidden,
-                            satAmount: satAmountNum
+                            satAmount
                         });
                     }
                 });
             }
         }
+        return DATA;
+    };
+
+    render() {
+        const {
+            navigation,
+            value,
+            satAmount,
+            feeRate,
+            lightning,
+            lightningAddress,
+            offer,
+            lnurlParams
+        } = this.props;
+        const satAmountNum =
+            satAmount !== undefined && !isNaN(Number(satAmount))
+                ? Number(satAmount)
+                : undefined;
+        const DATA = this.buildData(satAmountNum);
         return (
             <View style={{ flex: 1 }}>
                 <FlatList
@@ -403,17 +410,6 @@ const styles = StyleSheet.create({
         marginRight: 15,
         borderRadius: 50
     },
-    moreButton: {
-        height: 40,
-        paddingVertical: 10,
-        paddingHorizontal: 20,
-        justifyContent: 'space-between',
-        alignItems: 'center',
-        flexDirection: 'row',
-        marginLeft: 15,
-        marginRight: 15,
-        borderRadius: 15
-    },
     left: {
         flexDirection: 'row',
         alignItems: 'center',
@@ -436,6 +432,5 @@ const styles = StyleSheet.create({
     },
     subtitle: {
         marginTop: 2
-    },
-    eyeIcon: { alignSelf: 'center', margin: 15, marginLeft: 25 }
+    }
 });

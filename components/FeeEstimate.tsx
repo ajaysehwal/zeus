@@ -11,6 +11,7 @@ import { inject, observer } from 'mobx-react';
 import { LNURLWithdrawParams } from 'js-lnurl';
 
 import Amount from './Amount';
+import LoadingIndicator from './LoadingIndicator';
 import ModalBox from './ModalBox';
 import OnchainFeeInput from './OnchainFeeInput';
 
@@ -24,18 +25,14 @@ import { feeStore, settingsStore } from '../stores/Stores';
 import { localeString } from '../utils/LocaleUtils';
 import { themeColor } from '../utils/ThemeUtils';
 import BackendUtils from '../utils/BackendUtils';
-import LoadingIndicator from './LoadingIndicator';
 
 interface FeeEstimateProps {
     satAmount: string;
     lightning?: string;
     lnurlParams?: LNURLWithdrawParams;
     visible?: boolean;
-    /** When true, shows OnchainFeeInput for onchain payments */
     showOnchainFeeInput?: boolean;
-    /** Called when user changes the onchain fee rate */
     onFeeChange?: (fee: string) => void;
-    /** Initial fee rate from parent (persists across modal open/close) */
     feeRate?: string;
     navigation?: StackNavigationProp<any, any>;
     InvoicesStore?: InvoicesStore;
@@ -46,6 +43,32 @@ interface FeeEstimateState {
     showModal: boolean;
     feeRate: string;
 }
+const FeeCell = ({
+    value,
+    loading,
+    color
+}: {
+    value?: number;
+    loading?: boolean;
+    color?: string;
+}) => (
+    <View style={styles.cell}>
+        {loading ? (
+            <LoadingIndicator size={22} />
+        ) : value !== undefined ? (
+            <Amount sats={value} sensitive={false} colorOverride={color} />
+        ) : (
+            <Text
+                style={[
+                    styles.placeholder,
+                    { color: themeColor('secondaryText') }
+                ]}
+            >
+                {localeString('general.notAvailable')}
+            </Text>
+        )}
+    </View>
+);
 
 @inject('InvoicesStore', 'CashuStore')
 @observer
@@ -58,103 +81,78 @@ export default class FeeEstimate extends React.PureComponent<
         feeRate: ''
     };
 
-    renderFeeRow = (
+    private getDisplayedFeeRate(feeRateProp?: string): string {
+        if (feeRateProp) return feeRateProp;
+        if (this.state.feeRate) return this.state.feeRate;
+
+        const preferredRate =
+            settingsStore?.settings?.payments?.preferredMempoolRate ??
+            'fastestFee';
+        const fee =
+            feeStore?.recommendedFees?.[preferredRate] ??
+            feeStore?.recommendedFees?.fastestFee;
+
+        return fee != null ? String(fee) : '';
+    }
+
+    private renderFeeRow(
         label: string,
         fee?: number,
         total?: number,
         loading?: boolean
-    ) => (
-        <View style={styles.feeRow}>
-            <View style={styles.cell}>
-                <Text style={[styles.label, { color: themeColor('text') }]}>
-                    {label}
-                </Text>
-            </View>
-            <View style={styles.cell}>
-                {loading ? (
-                    <LoadingIndicator size={22} />
-                ) : fee !== undefined ? (
-                    <Amount
-                        sats={fee}
-                        sensitive={false}
-                        colorOverride={themeColor('bitcoin')}
-                    />
-                ) : (
-                    <Text
-                        style={[
-                            styles.placeholder,
-                            { color: themeColor('secondaryText') }
-                        ]}
-                    >
-                        {localeString('general.notAvailable')}
+    ) {
+        return (
+            <View style={styles.feeRow}>
+                <View style={styles.cell}>
+                    <Text style={[styles.label, { color: themeColor('text') }]}>
+                        {label}
                     </Text>
-                )}
+                </View>
+                <FeeCell
+                    value={fee}
+                    loading={loading}
+                    color={themeColor('bitcoin')}
+                />
+                <FeeCell
+                    value={
+                        total !== undefined
+                            ? total
+                            : fee !== undefined
+                            ? Number(this.props.satAmount) + (Number(fee) || 0)
+                            : undefined
+                    }
+                    loading={loading}
+                />
             </View>
-            <View style={styles.cell}>
-                {loading ? (
-                    <LoadingIndicator size={22} />
-                ) : total !== undefined ? (
-                    <Amount sats={total} sensitive={false} />
-                ) : (
-                    <Text
-                        style={[
-                            styles.placeholder,
-                            { color: themeColor('secondaryText') }
-                        ]}
-                    >
-                        {localeString('general.notAvailable')}
-                    </Text>
-                )}
-            </View>
-        </View>
-    );
+        );
+    }
 
-    render() {
+    private renderFeeContent(displayedFeeRate: string) {
         const {
             satAmount,
             lightning,
             lnurlParams,
-            visible = true,
             showOnchainFeeInput,
             onFeeChange,
-            feeRate: feeRateProp,
             navigation,
             InvoicesStore,
             CashuStore
         } = this.props;
-        const { feeRate: feeRateState } = this.state;
-        const feeRate = feeRateProp ?? feeRateState;
-        const preferredRate =
-            settingsStore?.settings?.payments?.preferredMempoolRate ||
-            'fastestFee';
-        const initialFeeFromStore =
-            feeStore?.recommendedFees?.[preferredRate] ??
-            feeStore?.recommendedFees?.fastestFee;
-        const displayedFeeRate =
-            feeRate ||
-            (initialFeeFromStore != null ? String(initialFeeFromStore) : '');
+
         const isLightningPayment = !!(lightning || lnurlParams);
-        const lightningEstimateFee = InvoicesStore?.feeEstimate ?? undefined;
-        const ecashEstimateFee = CashuStore?.feeEstimate ?? undefined;
-        const lightningFeeLoading =
+        const lightningFee = InvoicesStore?.feeEstimate ?? undefined;
+        const ecashFee = CashuStore?.feeEstimate ?? undefined;
+        const lightningLoading =
             isLightningPayment &&
             !!(InvoicesStore?.loading || InvoicesStore?.loadingFeeEstimate);
-        const ecashFeeLoading =
+        const ecashLoading =
             isLightningPayment &&
             BackendUtils.supportsCashuWallet() &&
             !!CashuStore?.loading;
 
-        const windowHeight = Dimensions.get('window').height;
-        const modalMaxHeight = Math.min(
-            Math.max(windowHeight * (showOnchainFeeInput ? 0.45 : 0.3), 280),
-            300
-        );
-        const { showModal } = this.state;
+        const satNum = Number(satAmount);
 
-        if (!satAmount) return null;
-        if (!visible) return null;
-
-        const feeContent = (
+        return (
             <View style={styles.container}>
                 <View style={styles.header}>
                     <View style={styles.headerSpacer} />
@@ -181,26 +179,27 @@ export default class FeeEstimate extends React.PureComponent<
                         </Text>
                     </View>
                 </View>
+
                 {this.renderFeeRow(
                     localeString('general.lightning'),
-                    lightningEstimateFee,
-                    lightningEstimateFee !== undefined
-                        ? Number(satAmount) +
-                              (Number(lightningEstimateFee) || 0)
+                    lightningFee,
+                    lightningFee !== undefined
+                        ? satNum + (Number(lightningFee) || 0)
                         : undefined,
-                    lightningFeeLoading
+                    lightningLoading
                 )}
+
                 {BackendUtils.supportsCashuWallet() &&
-                    (lightning || lnurlParams) &&
+                    isLightningPayment &&
                     this.renderFeeRow(
                         localeString('general.ecash'),
-                        ecashEstimateFee,
-                        ecashEstimateFee !== undefined
-                            ? Number(satAmount) +
-                                  (Number(ecashEstimateFee) || 0)
+                        ecashFee,
+                        ecashFee !== undefined
+                            ? satNum + (Number(ecashFee) || 0)
                             : undefined,
-                        ecashFeeLoading
+                        ecashLoading
                     )}
+
                 {showOnchainFeeInput &&
                     BackendUtils.supportsOnchainReceiving() &&
                     navigation && (
@@ -208,9 +207,7 @@ export default class FeeEstimate extends React.PureComponent<
                             <Text
                                 style={[
                                     styles.onchainFeeLabel,
-                                    {
-                                        color: themeColor('secondaryText')
-                                    }
+                                    { color: themeColor('secondaryText') }
                                 ]}
                             >
                                 {localeString('general.onchain')}{' '}
@@ -228,6 +225,24 @@ export default class FeeEstimate extends React.PureComponent<
                     )}
             </View>
         );
+    }
+
+    render() {
+        const {
+            satAmount,
+            visible = true,
+            showOnchainFeeInput,
+            feeRate: feeRateProp
+        } = this.props;
+        const { showModal } = this.state;
+
+        if (!satAmount || !visible) return null;
+
+        const displayedFeeRate = this.getDisplayedFeeRate(feeRateProp);
+        const windowHeight = Dimensions.get('window').height;
+        const modalMaxHeight = showOnchainFeeInput
+            ? Math.min(Math.max(windowHeight * 0.45, 280), 300)
+            : Math.min(Math.max(windowHeight * 0.25, 200), 260);
 
         return (
             <>
@@ -236,9 +251,7 @@ export default class FeeEstimate extends React.PureComponent<
                         onPress={() => this.setState({ showModal: true })}
                         style={[
                             styles.triggerButton,
-                            {
-                                backgroundColor: themeColor('secondary')
-                            }
+                            { backgroundColor: themeColor('secondary') }
                         ]}
                     >
                         <Text
@@ -256,6 +269,7 @@ export default class FeeEstimate extends React.PureComponent<
                         />
                     </TouchableOpacity>
                 </View>
+
                 <ModalBox
                     style={[
                         styles.modal,
@@ -264,10 +278,10 @@ export default class FeeEstimate extends React.PureComponent<
                             backgroundColor: themeColor('background')
                         }
                     ]}
-                    swipeToClose={true}
-                    backButtonClose={true}
-                    backdropPressToClose={true}
-                    backdrop={true}
+                    swipeToClose
+                    backButtonClose
+                    backdropPressToClose
+                    backdrop
                     position="bottom"
                     isOpen={showModal}
                     onClosed={() => this.setState({ showModal: false })}
@@ -294,7 +308,7 @@ export default class FeeEstimate extends React.PureComponent<
                                 height="16"
                             />
                         </TouchableOpacity>
-                        {feeContent}
+                        {this.renderFeeContent(displayedFeeRate)}
                     </View>
                 </ModalBox>
             </>
@@ -339,7 +353,9 @@ const styles = StyleSheet.create({
         fontSize: 18,
         textAlign: 'center'
     },
-    container: { paddingTop: 0 },
+    container: {
+        paddingTop: 0
+    },
     header: {
         flexDirection: 'row',
         paddingHorizontal: 10,

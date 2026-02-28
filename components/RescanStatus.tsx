@@ -1,16 +1,19 @@
 import * as React from 'react';
 import { inject, observer } from 'mobx-react';
 import { StackNavigationProp } from '@react-navigation/stack';
+import { ParamListBase } from '@react-navigation/native';
+import { StyleProp, ViewStyle } from 'react-native';
 
 import SyncStore from '../stores/SyncStore';
 import StatusCard from './StatusCard';
+
 import { localeString } from '../utils/LocaleUtils';
 import { themeColor } from '../utils/ThemeUtils';
 
 interface RescanStatusProps {
-    navigation: StackNavigationProp<any, any>;
+    navigation: StackNavigationProp<ParamListBase>;
     SyncStore?: SyncStore;
-    style?: any;
+    style?: StyleProp<ViewStyle>;
 }
 
 @inject('SyncStore')
