@@ -259,7 +259,7 @@ export default class Nodes extends React.Component<NodesProps, NodesState> {
             nodeActive: boolean
         ) => {
             if (SettingsStore.settings?.justDeletedWallet) {
-                this.handleJustDeletedWallet();
+                await this.handleJustDeletedWallet();
                 return;
             }
             if (initialStart) {
@@ -318,9 +318,16 @@ export default class Nodes extends React.Component<NodesProps, NodesState> {
                             fontFamily: 'PPNeueMontreal-Book'
                         }
                     }}
-                    onBack={async () => {
-                        await this.handleJustDeletedWallet();
-                    }}
+                    onBack={
+                        SettingsStore.settings?.justDeletedWallet
+                            ? async () => {
+                                  await this.handleJustDeletedWallet();
+                              }
+                            : undefined
+                    }
+                    navigateBackOnBackPress={
+                        !SettingsStore.settings?.justDeletedWallet
+                    }
                     rightComponent={<AddButton />}
                     navigation={navigation}
                 />

@@ -69,7 +69,6 @@ import {
     deleteLndWallet,
     stopLnd
 } from '../../utils/LndMobileUtils';
-import { restartNeeded } from '../../utils/RestartUtils';
 
 interface WalletConfigurationProps {
     navigation: StackNavigationProp<any, any>;
@@ -724,25 +723,13 @@ export default class WalletConfiguration extends React.Component<
 
     setWalletConfigurationAsActive = async () => {
         const { SettingsStore, navigation } = this.props;
-        const {
-            updateSettings,
-            setConnectingStatus,
-            setInitialStart,
-            embeddedLndStarted
-        } = SettingsStore;
-        const { index, implementation } = this.state;
+        const { updateSettings, setConnectingStatus, setInitialStart } =
+            SettingsStore;
+        const { index } = this.state;
 
         await updateSettings({
             selectedNode: index
         });
-
-        if (
-            implementation === 'embedded-lnd' &&
-            Platform.OS === 'android' &&
-            embeddedLndStarted
-        ) {
-            restartNeeded(true);
-        }
 
         this.setState({
             active: true
@@ -786,7 +773,9 @@ export default class WalletConfiguration extends React.Component<
 
         const lndDir = uuidv4();
 
-        SyncStore.reset();
+        if (!embeddedLndStarted) {
+            SyncStore.reset();
+        }
         let response;
         try {
             response = await createLndWallet({

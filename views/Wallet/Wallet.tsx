@@ -54,6 +54,7 @@ import {
     isTransientRpcError,
     LndErrorCode,
     matchesLndErrorCode,
+    retryOnTransientError,
     waitForRpcReady
 } from '../../utils/LndMobileUtils';
 import { localeString, bridgeJavaStrings } from '../../utils/LocaleUtils';
@@ -328,7 +329,7 @@ export default class Wallet extends React.Component<WalletProps, WalletState> {
         Linking.addEventListener('url', this.handleOpenURL);
     }
 
-    async getSettingsAndNavigate() {
+    async getSettingsAndNavigate(transientRetryCount = 0) {
         try {
             this.setState({ loading: true });
             const { SettingsStore, navigation } = this.props;
@@ -363,7 +364,7 @@ export default class Wallet extends React.Component<WalletProps, WalletState> {
                     this.startListeners();
                     this.setState({ unlocked: true });
                 }
-                await this.fetchData();
+                await this.fetchData(transientRetryCount);
             } else if (loginRequired) {
                 navigation.navigate('Lockscreen');
             } else if (
@@ -387,7 +388,7 @@ export default class Wallet extends React.Component<WalletProps, WalletState> {
                     this.startListeners();
                     this.setState({ unlocked: true });
                 }
-                await this.fetchData();
+                await this.fetchData(transientRetryCount);
             } else {
                 // Only navigate to IntroSplash if Wallet screen is focused
                 // to prevent interference when user is on other screens
@@ -395,6 +396,10 @@ export default class Wallet extends React.Component<WalletProps, WalletState> {
                 if (navigation.isFocused()) {
                     navigation.navigate('IntroSplash');
                 }
+            }
+        } catch (error) {
+            if (this.props.SettingsStore?.connecting) {
+                this.props.SettingsStore.setConnectingStatus(false);
             }
         } finally {
             this.setState({ loading: false });
@@ -405,7 +410,7 @@ export default class Wallet extends React.Component<WalletProps, WalletState> {
         }, 100);
     }
 
-    async fetchData() {
+    async fetchData(transientRetryCount = 0) {
         const {
             AlertStore,
             NodeInfoStore,
@@ -644,16 +649,19 @@ export default class Wallet extends React.Component<WalletProps, WalletState> {
                         return;
                     }
 
-                    // Handle transient errors - attempt restart
+                    // Handle transient errors - attempt restart with exponential backoff
                     if (isTransientRpcError(errorMessage)) {
-                        console.log(
-                            'Transient error during startup - attempting restart:',
-                            errorMessage
+                        await retryOnTransientError(
+                            error,
+                            errorMessage,
+                            'startLnd error',
+                            transientRetryCount,
+                            setConnectingStatus,
+                            () =>
+                                this.getSettingsAndNavigate(
+                                    transientRetryCount + 1
+                                )
                         );
-                        await new Promise((resolve) =>
-                            setTimeout(resolve, 2000)
-                        );
-                        this.getSettingsAndNavigate();
                         return;
                     }
 
@@ -830,16 +838,17 @@ export default class Wallet extends React.Component<WalletProps, WalletState> {
                     return;
                 }
 
-                // Handle transient RPC errors - attempt restart
+                // Handle transient RPC errors - attempt restart with exponential backoff
                 if (isTransientRpcError(errorMessage)) {
-                    console.log(
-                        'Transient RPC error - attempting restart:',
-                        errorMessage
+                    await retryOnTransientError(
+                        rpcError,
+                        errorMessage,
+                        'RPC error',
+                        transientRetryCount,
+                        setConnectingStatus,
+                        () =>
+                            this.getSettingsAndNavigate(transientRetryCount + 1)
                     );
-                    setConnectingStatus(false);
-                    await new Promise((resolve) => setTimeout(resolve, 2000));
-                    setConnectingStatus(true);
-                    this.getSettingsAndNavigate();
                     return;
                 }
 

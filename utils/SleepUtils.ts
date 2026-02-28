@@ -6,8 +6,10 @@ export interface RetryOptions<T> {
     fn: () => Promise<T>;
     /** Maximum number of attempts (default: 3) */
     maxRetries?: number;
-    /** Delay in ms between retries (default: 1000) */
+    /** Base delay in ms between retries (default: 1000) */
     delayMs?: number;
+    /** Double the delay with each attempt (default: false) */
+    exponentialBackoff?: boolean;
     /** If provided, only retry when this returns true. Otherwise throw immediately. */
     shouldRetry?: (error: unknown) => boolean;
     onRetry?: (attempt: number, error: unknown) => Promise<T | void> | T | void;
@@ -21,6 +23,7 @@ async function retry<T>({
     fn,
     maxRetries = 3,
     delayMs = 1000,
+    exponentialBackoff = false,
     shouldRetry,
     onRetry
 }: RetryOptions<T>): Promise<T> {
@@ -33,7 +36,10 @@ async function retry<T>({
             if (attempt === maxRetries) break;
             if (shouldRetry && !shouldRetry(error)) throw error;
             if (onRetry) await onRetry(attempt, error);
-            if (attempt < maxRetries) await sleep(delayMs);
+            const waitMs = exponentialBackoff
+                ? delayMs * Math.pow(2, attempt - 1)
+                : delayMs;
+            await sleep(waitMs);
         }
     }
     throw lastError;
