@@ -24,7 +24,8 @@ import { nodeInfoStore, settingsStore } from '../../stores/Stores';
 interface PaymentMethodListProps {
     navigation: StackNavigationProp<any, any>;
     value?: string;
-    satAmount?: string;
+    satAmount?: number | string;
+    feeRate?: string;
     lightning?: string;
     lightningAddress?: string;
     ecash?: string;
@@ -52,36 +53,56 @@ type DataRow = {
     balance?: number | string;
     account?: string;
     hidden?: boolean;
+    satAmount?: number;
 };
 
+const LAYER_LOCALE_MAP: Record<string, string> = {
+    Lightning: 'general.lightning',
+    'Lightning via ecash': 'components.LayerBalances.lightningViaEcash',
+    'Lightning address': 'general.lightningAddress',
+    Offer: 'views.Settings.Bolt12Offer',
+    'On-chain': 'general.onchain'
+};
+
+const getGradientColors = (): [string, string] => {
+    const gradient = themeColor('buttonGradient');
+    if (gradient) return gradient;
+    const bg = themeColor('buttonBackground') ?? themeColor('secondary');
+    return [bg, bg];
+};
+
+const LayerIcon = ({ layer }: { layer: string }) => {
+    if (layer === 'Lightning via ecash') return <EcashSvg />;
+    if (layer === 'On-chain') return <OnChainSvg />;
+    if (['Lightning', 'Lightning address', 'Offer'].includes(layer))
+        return <LightningSvg />;
+    return <OnChainSvg />;
+};
+
+const hasInsufficientBalance = (
+    balance: number | string | undefined,
+    satAmount: number | undefined
+) =>
+    Number(balance) === 0 ||
+    (satAmount !== undefined && satAmount > Number(balance));
+
 const Row = ({ item }: { item: DataRow }) => {
+    const insufficient = hasInsufficientBalance(item.balance, item.satAmount);
+    const layerLabel = LAYER_LOCALE_MAP[item.layer]
+        ? localeString(LAYER_LOCALE_MAP[item.layer])
+        : item.layer;
     return (
-        <RectButton style={{ opacity: item.disabled ? 0.5 : 1 }}>
+        <RectButton
+            style={{
+                opacity: item.disabled ? 0.5 : 1
+            }}
+        >
             <LinearGradient
-                colors={
-                    themeColor('buttonGradient')
-                        ? themeColor('buttonGradient')
-                        : themeColor('buttonBackground')
-                        ? [
-                              themeColor('buttonBackground'),
-                              themeColor('buttonBackground')
-                          ]
-                        : [themeColor('secondary'), themeColor('secondary')]
-                }
+                colors={getGradientColors()}
                 style={styles.rectButton}
             >
                 <View style={styles.left}>
-                    {item.layer === 'On-chain' ? (
-                        <OnChainSvg />
-                    ) : item.layer === 'Lightning' ||
-                      item.layer === 'Lightning address' ||
-                      item.layer === 'Offer' ? (
-                        <LightningSvg />
-                    ) : item.layer === 'Lightning via ecash' ? (
-                        <EcashSvg />
-                    ) : (
-                        <OnChainSvg />
-                    )}
+                    <LayerIcon layer={item.layer} />
                     <Spacer width={5} />
                     <View
                         style={{
@@ -97,28 +118,21 @@ const Row = ({ item }: { item: DataRow }) => {
                                     themeColor('text')
                             }}
                         >
-                            {item.layer === 'Lightning'
-                                ? localeString('general.lightning')
-                                : item.layer === 'Lightning via ecash'
-                                ? localeString(
-                                      'components.LayerBalances.lightningViaEcash'
-                                  )
-                                : item.layer === 'Lightning address'
-                                ? localeString('general.lightningAddress')
-                                : item.layer === 'Offer'
-                                ? localeString('views.Settings.Bolt12Offer')
-                                : item.layer === 'On-chain'
-                                ? localeString('general.onchain')
-                                : item.layer}
+                            {layerLabel}
                         </Text>
                         {item.subtitle && (
                             <Text
-                                style={{
-                                    ...styles.layerText,
-                                    color:
-                                        themeColor('buttonTextSecondary') ||
-                                        themeColor('secondaryText')
-                                }}
+                                numberOfLines={1}
+                                ellipsizeMode="middle"
+                                style={[
+                                    styles.layerText,
+                                    styles.subtitle,
+                                    {
+                                        color:
+                                            themeColor('buttonTextSecondary') ||
+                                            themeColor('secondaryText')
+                                    }
+                                ]}
                             >
                                 {item.subtitle}
                             </Text>
@@ -130,7 +144,11 @@ const Row = ({ item }: { item: DataRow }) => {
                         <Amount
                             sats={item.balance}
                             sensitive
-                            colorOverride={themeColor('buttonText')}
+                            colorOverride={
+                                insufficient
+                                    ? themeColor('error')
+                                    : themeColor('buttonText')
+                            }
                         />
                     </View>
                 )}
@@ -144,6 +162,7 @@ const SwipeableRow = ({
     navigation,
     value,
     satAmount,
+    feeRate,
     lightning,
     lightningAddress,
     offer,
@@ -153,12 +172,15 @@ const SwipeableRow = ({
     index: number;
     navigation: StackNavigationProp<any, any>;
     value?: string;
-    satAmount?: string;
+    satAmount?: number;
+    feeRate?: string;
     lightning?: string;
     lightningAddress?: string;
     offer?: string;
     lnurlParams?: LNURLWithdrawParams | undefined;
 }) => {
+    const insufficient = hasInsufficientBalance(item.balance, item.satAmount);
+    const rowDisabled = item.disabled || insufficient;
     if (item.layer === 'Lightning') {
         return (
             <LightningSwipeableRow
@@ -166,7 +188,7 @@ const SwipeableRow = ({
                 lightning={lightning}
                 locked={true}
                 lnurlParams={lnurlParams}
-                disabled={item.disabled}
+                disabled={rowDisabled}
             >
                 <Row item={item} />
             </LightningSwipeableRow>
@@ -179,7 +201,7 @@ const SwipeableRow = ({
                 navigation={navigation}
                 lightningAddress={lightningAddress}
                 locked={true}
-                disabled={item.disabled}
+                disabled={rowDisabled}
             >
                 <Row item={item} />
             </LightningSwipeableRow>
@@ -193,7 +215,7 @@ const SwipeableRow = ({
                 lightning={lightning}
                 locked={true}
                 lnurlParams={lnurlParams}
-                disabled={item.disabled}
+                disabled={rowDisabled}
             >
                 <Row item={item} />
             </EcashSwipeableRow>
@@ -206,7 +228,7 @@ const SwipeableRow = ({
                 navigation={navigation}
                 offer={offer}
                 locked={true}
-                disabled={item.disabled}
+                disabled={rowDisabled}
             >
                 <Row item={item} />
             </LightningSwipeableRow>
@@ -219,9 +241,10 @@ const SwipeableRow = ({
                 navigation={navigation}
                 value={value}
                 satAmount={satAmount}
+                feeRate={feeRate}
                 locked={true}
                 hidden={item.hidden}
-                disabled={item.disabled}
+                disabled={rowDisabled}
                 account={item.account}
             >
                 <Row item={item} />
@@ -234,11 +257,9 @@ export default class PaymentMethodList extends Component<
     PaymentMethodListProps,
     {}
 > {
-    render() {
+    private buildData = (satAmount: number | undefined): DataRow[] => {
         const {
-            navigation,
             value,
-            satAmount,
             lightning,
             lightningAddress,
             offer,
@@ -248,47 +269,48 @@ export default class PaymentMethodList extends Component<
             ecashBalance,
             accounts
         } = this.props;
-
         let DATA: DataRow[] = [];
 
         if (lightning || lnurlParams) {
             DATA.push({
                 layer: 'Lightning',
-                subtitle: lightning
-                    ? `${lightning?.slice(0, 12)}...${lightning?.slice(-12)}`
-                    : lnurlParams?.tag,
-                balance: lightningBalance
+                subtitle: lightning ?? lnurlParams?.tag,
+                balance: lightningBalance,
+                disabled: false,
+                satAmount
             });
-        }
 
-        if (
-            (lightning || lnurlParams) &&
-            BackendUtils.supportsCashuWallet() &&
-            settingsStore?.settings?.ecash?.enableCashu
-        ) {
-            DATA.push({
-                layer: 'Lightning via ecash',
-                subtitle: lightning
-                    ? `${lightning?.slice(0, 12)}...${lightning?.slice(-12)}`
-                    : lnurlParams?.tag,
-                balance: ecashBalance
-            });
+            if (
+                BackendUtils.supportsCashuWallet() &&
+                settingsStore?.settings?.ecash?.enableCashu
+            ) {
+                DATA.push({
+                    layer: 'Lightning via ecash',
+                    subtitle: lightning ?? lnurlParams?.tag,
+                    balance: ecashBalance,
+                    disabled: false,
+                    satAmount
+                });
+            }
         }
 
         if (lightningAddress) {
             DATA.push({
                 layer: 'Lightning address',
                 subtitle: lightningAddress,
-                balance: lightningBalance
+                balance: lightningBalance,
+                disabled: false,
+                satAmount
             });
         }
 
         if (offer) {
             DATA.push({
                 layer: 'Offer',
-                subtitle: `${offer?.slice(0, 12)}...${offer?.slice(-12)}`,
+                subtitle: offer,
                 disabled: !nodeInfoStore.supportsOffers,
-                balance: lightningBalance
+                balance: lightningBalance,
+                satAmount
             });
         }
 
@@ -296,12 +318,11 @@ export default class PaymentMethodList extends Component<
         if (value && BackendUtils.supportsOnchainReceiving()) {
             DATA.push({
                 layer: 'On-chain',
-                subtitle: value
-                    ? `${value.slice(0, 12)}...${value.slice(-12)}`
-                    : undefined,
+                subtitle: value,
                 disabled: !BackendUtils.supportsOnchainSends(),
                 balance: onchainBalance,
-                account: 'default'
+                account: 'default',
+                satAmount
             });
 
             if (accounts && accounts.length > 0) {
@@ -309,18 +330,36 @@ export default class PaymentMethodList extends Component<
                     if (!account.hidden && !account.watch_only) {
                         DATA.push({
                             layer: account.name,
-                            subtitle: value
-                                ? `${value.slice(0, 12)}...${value.slice(-12)}`
-                                : account.XFP,
+                            subtitle: value ?? account.XFP,
                             disabled: false,
                             balance: account.balance,
                             account: account.name,
-                            hidden: account.hidden
+                            hidden: account.hidden,
+                            satAmount
                         });
                     }
                 });
             }
         }
+        return DATA;
+    };
+
+    render() {
+        const {
+            navigation,
+            value,
+            satAmount,
+            feeRate,
+            lightning,
+            lightningAddress,
+            offer,
+            lnurlParams
+        } = this.props;
+        const satAmountNum =
+            satAmount !== undefined && !isNaN(Number(satAmount))
+                ? Number(satAmount)
+                : undefined;
+        const DATA = this.buildData(satAmountNum);
         return (
             <View style={{ flex: 1 }}>
                 <FlatList
@@ -336,14 +375,19 @@ export default class PaymentMethodList extends Component<
                             navigation={navigation}
                             // select pay method vars
                             value={value}
-                            satAmount={satAmount}
+                            satAmount={satAmountNum}
+                            feeRate={feeRate}
                             lightning={lightning}
                             lightningAddress={lightningAddress}
                             offer={offer}
                             lnurlParams={lnurlParams}
                         />
                     )}
-                    keyExtractor={(_item, index) => `message ${index}`}
+                    keyExtractor={(item) =>
+                        item.account
+                            ? `account-${item.account}`
+                            : `layer-${item.layer}`
+                    }
                     style={{ marginTop: 20 }}
                     refreshing={false}
                 />
@@ -366,17 +410,6 @@ const styles = StyleSheet.create({
         marginRight: 15,
         borderRadius: 50
     },
-    moreButton: {
-        height: 40,
-        paddingVertical: 10,
-        paddingHorizontal: 20,
-        justifyContent: 'space-between',
-        alignItems: 'center',
-        flexDirection: 'row',
-        marginLeft: 15,
-        marginRight: 15,
-        borderRadius: 15
-    },
     left: {
         flexDirection: 'row',
         alignItems: 'center',
@@ -397,5 +430,7 @@ const styles = StyleSheet.create({
         fontSize: 15,
         fontFamily: 'PPNeueMontreal-Medium'
     },
-    eyeIcon: { alignSelf: 'center', margin: 15, marginLeft: 25 }
+    subtitle: {
+        marginTop: 2
+    }
 });

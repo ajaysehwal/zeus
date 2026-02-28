@@ -25,7 +25,8 @@ import Send from './../../assets/images/SVG/Send.svg';
 interface OnchainSwipeableRowProps {
     navigation: StackNavigationProp<any, any>;
     value?: string;
-    satAmount?: string;
+    satAmount?: number;
+    feeRate?: string;
     locked?: boolean;
     account?: string;
     hidden?: boolean;
@@ -168,10 +169,11 @@ export default class OnchainSwipeableRow extends Component<
     };
 
     private sendToAddress = () => {
-        const { navigation, value, satAmount } = this.props;
+        const { navigation, value, satAmount, feeRate } = this.props;
         navigation.navigate('Send', {
             destination: value,
             satAmount,
+            fee: feeRate,
             transactionType: 'On-chain'
         });
     };
