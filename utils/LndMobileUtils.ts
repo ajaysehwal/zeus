@@ -45,10 +45,6 @@ import {
 
 export {
     LndErrorCode,
-    LND_ERROR_MESSAGES,
-    LND_ERROR_PATTERNS,
-    MAX_TRANSIENT_RPC_RETRIES,
-    TRANSIENT_RPC_RETRY_BASE_MS,
     createLndError,
     getErrorMessage,
     isLndError,
@@ -64,8 +60,6 @@ export {
 // ---------------------------------------------------------------------------
 const STATE_SUBSCRIPTION_SETTLE_MS = 500; // Delay to allow state subscription to settle after LND start
 const LND_RETRY_DELAY_MS = 3000; // Base delay between LND start retry attempts
-const ANDROID_PROCESS_CLEANUP_DELAY_MS = 4000; // Extra time Android needs for process cleanup (slower than iOS)
-const IOS_PROCESS_CLEANUP_DELAY_MS = 2000; // iOS process cleanup delay
 const GEN_SEED_STOP_DELAY_MS = 3000; // Delay after stopping LND before wallet creation restart attempts
 const GEN_SEED_MAX_RETRIES = 10; // Max retries when LND unlocks too quickly during wallet creation
 const GEN_SEED_RETRY_DELAY_MS = 500; // Delay between genSeed retry attempts (ms)
@@ -77,6 +71,10 @@ export const NEUTRINO_PING_TIMEOUT_MS = 1500;
 export const NEUTRINO_PING_OPTIMAL_MS = 200;
 export const NEUTRINO_PING_LAX_MS = 500;
 export const NEUTRINO_PING_THRESHOLD_MS = 1000;
+
+const NEUTRINO_PING_CONCURRENCY = 3;
+/** Auto peer scan only; manual pings keep {@link NEUTRINO_PING_TIMEOUT_MS} */
+const NEUTRINO_PEER_SCAN_TIMEOUT_MS = 900;
 
 // Fetch-based latency check that runs entirely on the JS thread,
 // avoiding the native thread race condition in react-native-ping.
@@ -140,8 +138,6 @@ export function checkLndStreamErrorResponse(
             name + ': Got invalid response from lnd: ' + JSON.stringify(event)
         );
     }
-    console.log('name', name);
-    console.log('checkLndStreamErrorResponse error_desc:', event.error_desc);
     if (event.error_code) {
         const errorDesc = event.error_desc || '';
 
@@ -380,11 +376,7 @@ export async function initializeLnd({
     await initialize();
 }
 
-/**
- * Resolves when the SubscribeState gRPC stream emits EOF (LND stopped).
- * Must be called before initiating shutdown to avoid missing the event.
- * Falls back to resolving after timeoutMs if the EOF already passed.
- */
+/** Resolves on SubscribeState EOF (LND stopped) or after timeoutMs */
 function waitForSubscribeStateEOF(timeoutMs: number): {
     promise: Promise<void>;
     cancel: () => void;
@@ -438,12 +430,7 @@ function waitForSubscribeStateEOF(timeoutMs: number): {
     };
 }
 
-/**
- * Stops the LND process gracefully using an event-driven approach.
- * @param timeoutMs - Max time to wait for the SubscribeState EOF shutdown signal (default: 5000ms)
- * @param forceStop - If true, skip status check and always call stopDaemon. Use when Go layer
- *   reports "already started" but Java checkStatus says not running (state mismatch).
- */
+/** Stops LND gracefully; waits for SubscribeState EOF as shutdown confirmation */
 export async function stopLnd(
     timeoutMs = STOP_LND_TIMEOUT_MS,
     forceStop = false
@@ -534,15 +521,7 @@ export async function stopLnd(
     }
 }
 
-/**
- * Starts the LND process and waits for it to reach a ready state
- * @param lndDir - LND data directory path
- * @param walletPassword - Password to unlock the wallet (empty for new wallet creation)
- * @param isTorEnabled - Whether Tor is enabled
- * @param isTestnet - Whether to run on testnet
- * @param isRecovery - Whether this is a wallet recovery (skips folder existence check)
- * @throws Error if LND folder is missing, startup fails, or timeout occurs
- */
+/** Starts LND and waits for it to reach a ready state (wallet unlocked / RPC active) */
 export async function startLnd({
     lndDir = 'lnd',
     walletPassword,
@@ -587,32 +566,28 @@ export async function startLnd({
         settingsStore.embeddedLndStarted = true;
     }
 
-    // Register the SubscribeState listener before native startLnd fires.
-    // On both platforms, native startLnd starts the SubscribeState stream inside
-    // its own callback before resolving the JS promise, so the first state event
-    // may arrive before or alongside the resolved promise.  Registering first
-    // guarantees we never miss it.  The JS subscribeState() call is a no-op
-    // because "SubscribeState" is already tracked natively (streamsStarted /
-    // activeStreams), preventing a duplicate subscription.
+    // Register before native startLnd so we never miss the first SubscribeState event.
     const readyPromise = waitForLndReady({
         decodeState,
         walletPassword,
         unlockWallet
     });
-    await startLndWithRetry({
-        startLnd,
-        lndDir,
-        isTorEnabled,
-        isTestnet,
-        walletPassword,
-        unlockWallet
-    });
+    try {
+        await startLndWithRetry({
+            startLnd,
+            lndDir,
+            isTorEnabled,
+            isTestnet,
+            walletPassword,
+            unlockWallet
+        });
+    } catch (error) {
+        LndMobileEventEmitter.removeAllListeners('SubscribeState');
+        throw error;
+    }
     await readyPromise;
 }
 
-/**
- * Helper function to start LND with retry logic
- */
 async function startLndWithRetry({
     startLnd,
     lndDir,
@@ -646,18 +621,6 @@ async function startLndWithRetry({
         ) {
             throw createLndError(LndErrorCode.LND_FOLDER_MISSING);
         }
-        if (
-            matchesLndErrorCode(errorMessage, LndErrorCode.LND_ALREADY_RUNNING)
-        ) {
-            log.d('LND already started - force stop (Go thinks running)');
-            await stopLnd(STOP_LND_TIMEOUT_MS, true);
-            const delayMs =
-                Platform.OS === 'android'
-                    ? ANDROID_PROCESS_CLEANUP_DELAY_MS
-                    : IOS_PROCESS_CLEANUP_DELAY_MS;
-            await sleep(delayMs);
-        }
-
         log.w('Error starting LND, attempting retry', [error]);
         await retryStartLnd({
             startLnd,
@@ -714,14 +677,10 @@ async function retryStartLnd({
                 return;
             }
             if (matchesLndErrorCode(msg, LndErrorCode.LND_ALREADY_RUNNING)) {
-                log.d(`LND still running (attempt ${attempt}) - force stop`);
-                await stopLnd(STOP_LND_TIMEOUT_MS, true);
-                await sleep(
-                    Platform.OS === 'android'
-                        ? ANDROID_PROCESS_CLEANUP_DELAY_MS
-                        : IOS_PROCESS_CLEANUP_DELAY_MS
+                log.d(
+                    'LND already running — skip further start attempts; SubscribeState from native'
                 );
-                continue;
+                return;
             }
 
             log.w(`Retry attempt ${attempt}/${MAX_START_LND_RETRIES} failed`, [
@@ -736,10 +695,6 @@ async function retryStartLnd({
         }
     }
 }
-
-/**
- * Helper function to wait for LND to reach a ready state
- */
 
 async function waitForLndReady({
     decodeState,
@@ -835,14 +790,7 @@ async function waitForLndReady({
 
                         case lnrpc.WalletState.SERVER_ACTIVE:
                             log.d('Server is active');
-                            try {
-                                await handleRpcReady('SERVER_ACTIVE');
-                            } catch (e: any) {
-                                log.e(
-                                    'RPC ready check failed (SERVER_ACTIVE)',
-                                    [e]
-                                );
-                            }
+                            await handleRpcReady('SERVER_ACTIVE');
                             settle(() => resolve(true));
                             break;
 
@@ -869,15 +817,35 @@ async function waitForLndReady({
             LndMobileEventEmitter.addListener('SubscribeState', stateHandler);
         });
 
-    // Register before native startLnd so we never miss the initial state event.
     const statePromise = waitForState();
-
-    // Both platforms start the SubscribeState stream natively inside the
-    // startLnd callback, before the JS promise resolves, so no explicit
-    // subscribeState() call or guard sleep is needed here.
-    log.d('SubscribeState stream started natively — skipping JS subscribe');
-
+    log.d('Waiting for SubscribeState (started natively)');
     return statePromise;
+}
+
+async function pingNeutrinoHosts(
+    hosts: string[]
+): Promise<{ peer: string; ms: number | string }[]> {
+    const results: { peer: string; ms: number | string }[] = [];
+    for (let i = 0; i < hosts.length; i += NEUTRINO_PING_CONCURRENCY) {
+        const chunk = hosts.slice(i, i + NEUTRINO_PING_CONCURRENCY);
+        const chunkResults = await Promise.all(
+            chunk.map(async (peer) => {
+                try {
+                    const ms = await pingPeer(
+                        peer,
+                        NEUTRINO_PEER_SCAN_TIMEOUT_MS
+                    );
+                    log.d(`Neutrino ping OK ${peer} ${ms}ms`);
+                    return { peer, ms };
+                } catch {
+                    log.d(`Neutrino ping timeout ${peer}`);
+                    return { peer, ms: 'Timed out' };
+                }
+            })
+        );
+        results.push(...chunkResults);
+    }
+    return results;
 }
 
 export async function optimizeNeutrinoPeers(
@@ -885,32 +853,11 @@ export async function optimizeNeutrinoPeers(
     peerTargetCount: number = 3
 ) {
     console.log('Optimizing Neutrino peers');
-    let peers = isTestnet
+    const primary = isTestnet
         ? DEFAULT_NEUTRINO_PEERS_TESTNET
         : DEFAULT_NEUTRINO_PEERS_MAINNET;
 
-    const results: { peer: string; ms: number | string }[] = [];
-    for (let i = 0; i < peers.length; i++) {
-        const peer = peers[i];
-        await new Promise(async (resolve) => {
-            try {
-                const ms = await pingPeer(peer);
-                console.log(`# ${peer} - ${ms}`);
-                results.push({
-                    peer,
-                    ms
-                });
-                resolve(true);
-            } catch (e) {
-                console.log('e', e);
-                results.push({
-                    peer,
-                    ms: 'Timed out'
-                });
-                resolve(true);
-            }
-        });
-    }
+    let results = await pingNeutrinoHosts(primary);
 
     // Optimal
 
@@ -990,48 +937,25 @@ export async function optimizeNeutrinoPeers(
         );
 
         for (let j = 0; j < SECONDARY_NEUTRINO_PEERS_MAINNET.length; j++) {
-            if (selectedPeers.length < peerTargetCount) {
-                peers = SECONDARY_NEUTRINO_PEERS_MAINNET[j];
-                console.log('Trying peers', peers);
-                for (let i = 0; i < peers.length; i++) {
-                    const peer = peers[i];
-                    await new Promise(async (resolve) => {
-                        try {
-                            const ms = await pingPeer(peer);
-                            console.log(`# ${peer} - ${ms}`);
-                            results.push({
-                                peer,
-                                ms
-                            });
-                            resolve(true);
-                        } catch (e) {
-                            console.log('e', e);
-                            results.push({
-                                peer,
-                                ms: 'Timed out'
-                            });
-                            resolve(true);
-                        }
-                    });
+            if (selectedPeers.length >= peerTargetCount) break;
+
+            const group = SECONDARY_NEUTRINO_PEERS_MAINNET[j];
+            console.log('Trying peers', group);
+            results.push(...(await pingNeutrinoHosts(group)));
+
+            for (const result of results) {
+                if (selectedPeers.length >= peerTargetCount) break;
+                const ms = result.ms;
+                if (
+                    typeof ms === 'number' &&
+                    Number.isInteger(ms) &&
+                    ms < NEUTRINO_PING_THRESHOLD_MS &&
+                    !selectedPeers.includes(result.peer)
+                ) {
+                    selectedPeers.push(result.peer);
                 }
             }
         }
-
-        const filteredResults = results.filter((result: any) => {
-            return (
-                Number.isInteger(result.ms) &&
-                result.ms < NEUTRINO_PING_THRESHOLD_MS
-            );
-        });
-
-        filteredResults.forEach((result: any) => {
-            if (
-                !selectedPeers.includes(result.peer) &&
-                selectedPeers.length < peerTargetCount
-            ) {
-                selectedPeers.push(result.peer);
-            }
-        });
 
         console.log('Peers count:', selectedPeers.length);
     }
@@ -1227,9 +1151,7 @@ export async function createLndWallet({
 }
 
 /**
- * Waits for LND RPC to become ready by polling getInfo
- * @param timeoutMs - Maximum time to wait in milliseconds (default: 30000)
- * @throws Error if RPC doesn't become ready within timeout or encounters a fatal error
+ * Polls getInfo until RPC is ready; throws on timeout or fatal error
  */
 export async function waitForRpcReady(timeoutMs = 30000) {
     const startTime = Date.now();
@@ -1256,8 +1178,13 @@ export async function waitForRpcReady(timeoutMs = 30000) {
                 await sleep(500);
                 continue;
             }
+            // Brief race after state transitions (e.g. SERVER_ACTIVE vs full RPC)
+            if (matchesLndErrorCode(errorMessage, LndErrorCode.WALLET_LOCKED)) {
+                log.d('getInfo: wallet still locked, retrying...');
+                await sleep(500);
+                continue;
+            }
 
-            // Fatal error - stop immediately
             log.e('Fatal error while waiting for RPC', [error]);
             throw error;
         }

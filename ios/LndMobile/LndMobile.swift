@@ -124,6 +124,15 @@ class LndMobile: RCTEventEmitter {
   func startLnd(_ args: String, lndDir: String, isTorEnabled: Bool, isTestnet: Bool, resolve: @escaping RCTPromiseResolveBlock, rejecter reject:@escaping RCTPromiseRejectBlock) {
     Lnd.shared.startLnd(args, lndDir: lndDir, isTorEnabled: isTorEnabled, isTestnet: isTestnet) { [weak self] (data, error) in
       if let e = error {
+        let desc = e.localizedDescription.lowercased()
+        if desc.contains("already started") || desc.contains("already running") {
+          NSLog("LND already running — skipping start, ensuring SubscribeState")
+          self?.startStateSubscription()
+          resolve([
+            "data": data?.base64EncodedString() ?? ""
+          ])
+          return
+        }
         reject("error", e.localizedDescription, e)
         return
       }

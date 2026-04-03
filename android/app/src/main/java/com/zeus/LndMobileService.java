@@ -482,6 +482,29 @@ public class LndMobileService extends Service {
     new Thread(gossipSync).start();
   }
 
+  private static boolean isLndAlreadyRunningError(String message) {
+    if (message == null) return false;
+    String lower = message.toLowerCase();
+    return lower.contains("already started") || lower.contains("already running");
+  }
+
+  /** Start SubscribeState stream if not already active (same as successful start path). */
+  private void startNativeSubscribeStateIfNeeded(Messenger recipient) {
+    if (streamsStarted.contains("SubscribeState")) {
+      return;
+    }
+    streamsStarted.add("SubscribeState");
+    try {
+      Method m = streamMethods.get("SubscribeState");
+      if (m != null) {
+        m.invoke(null, new byte[0], new LndStateStreamCallback(recipient));
+      }
+    } catch (Exception e) {
+      Log.e(TAG, "Failed to start native SubscribeState stream", e);
+      streamsStarted.remove("SubscribeState");
+    }
+  }
+
   void startLnd(Messenger recipient, String args, int request) {
     Runnable startLnd = new Runnable() {
 
@@ -491,11 +514,24 @@ public class LndMobileService extends Service {
 
           @Override
           public void onError(Exception e) {
+            String errMsg = e.toString();
+            if (isLndAlreadyRunningError(errMsg)) {
+              Log.i(TAG, "LND already running — skipping start, ensuring SubscribeState");
+              lndStarted = true;
+              startNativeSubscribeStateIfNeeded(recipient);
+              Message msg = Message.obtain(null, MSG_START_LND_RESULT, request, 0);
+              Bundle bundle = new Bundle();
+              bundle.putByteArray("response", new byte[0]);
+              msg.setData(bundle);
+              sendToClient(recipient, msg);
+              return;
+            }
+
             Message msg = Message.obtain(null, MSG_START_LND_RESULT, request, 0);
 
             Bundle bundle = new Bundle();
             bundle.putString("error_code", "Lnd Startup Error");
-            bundle.putString("error_desc", e.toString());
+            bundle.putString("error_desc", errMsg);
             msg.setData(bundle);
 
             sendToClient(recipient, msg);
@@ -508,18 +544,7 @@ public class LndMobileService extends Service {
 
             // Start SubscribeState before resolving the JS promise so JS can
             // register its listener first and never miss the initial state event.
-            if (!streamsStarted.contains("SubscribeState")) {
-              streamsStarted.add("SubscribeState");
-              try {
-                Method m = streamMethods.get("SubscribeState");
-                if (m != null) {
-                  m.invoke(null, new byte[0], new LndStateStreamCallback(recipient));
-                }
-              } catch (Exception e) {
-                Log.e(TAG, "Failed to start native SubscribeState stream", e);
-                streamsStarted.remove("SubscribeState");
-              }
-            }
+            startNativeSubscribeStateIfNeeded(recipient);
 
             Message msg = Message.obtain(null, MSG_START_LND_RESULT, request, 0);
             Bundle bundle = new Bundle();
