@@ -711,7 +711,9 @@ async function waitForLndReady({
         await waitForRpcReady();
         if (walletPassword && !syncStore.isSyncing) {
             log.d('Starting sync');
-            syncStore.startSyncing();
+            void syncStore.startSyncing().catch(() => {
+                // Sync can fail if LND stops (e.g. wallet switch)
+            });
         }
         if (settingsStore?.settings?.rescan) {
             syncStore.startRescanTracking(0);

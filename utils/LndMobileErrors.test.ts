@@ -119,6 +119,11 @@ describe('LndMobileErrors classification', () => {
             )
         ).toBe(true);
         expect(isTransientRpcError('folder missing')).toBe(false);
+        expect(
+            isTransientRpcError(
+                'rpc error: code = Unknown desc = unable to get best block info: sql: database is closed'
+            )
+        ).toBe(true);
     });
 
     it('identifies expected stop-LND errors', () => {
