@@ -29,7 +29,9 @@ export default class NodeInfoStore {
             () => this.channelsStore.channels,
             () => {
                 if (this.channelsStore.channels.length !== 0) {
-                    this.getNodeInfo();
+                    void this.getNodeInfo().catch(() => {
+                        // Error state set inside getNodeInfo; avoid unhandled rejection
+                    });
                 }
             }
         );

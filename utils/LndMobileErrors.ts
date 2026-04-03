@@ -167,7 +167,8 @@ export function isStopLndExpectedError(msg: string): boolean {
 const TRANSIENT_RPC_ERROR_CODES: LndErrorCode[] = [
     LndErrorCode.RPC_CONNECTION_CLOSED,
     LndErrorCode.RPC_NOT_READY,
-    LndErrorCode.MACAROON_STORE_LOCKED
+    LndErrorCode.MACAROON_STORE_LOCKED,
+    LndErrorCode.WALLET_LOCKED
 ];
 
 /** Check if error message is a transient RPC error (retryable) */

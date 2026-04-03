@@ -517,7 +517,9 @@ export default class OpenChannel extends React.Component<
                                         ChannelsStore.setChannelsType(
                                             ChannelsType.Pending
                                         );
-                                        NodeInfoStore.getNodeInfo();
+                                        void NodeInfoStore.getNodeInfo().catch(
+                                            () => {}
+                                        );
                                         ChannelsStore.getChannels();
                                         navigation.navigate('Wallet', {
                                             switchToChannels: true
@@ -529,7 +531,9 @@ export default class OpenChannel extends React.Component<
                             <Button
                                 title={localeString('general.ok')}
                                 onPress={() => {
-                                    NodeInfoStore.getNodeInfo();
+                                    void NodeInfoStore.getNodeInfo().catch(
+                                        () => {}
+                                    );
                                     ChannelsStore.getChannels();
                                     navigation.goBack();
                                 }}

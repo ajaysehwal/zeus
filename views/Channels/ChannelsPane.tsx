@@ -441,7 +441,9 @@ export default class ChannelsPane extends React.PureComponent<
                     renderItem={this.renderItem}
                     ListFooterComponent={<Spacer height={100} />}
                     onRefresh={() => {
-                        this.props.NodeInfoStore?.getNodeInfo();
+                        void this.props.NodeInfoStore?.getNodeInfo().catch(
+                            () => {}
+                        );
                         getChannels();
                     }}
                     refreshing={loading}
@@ -673,7 +675,9 @@ export default class ChannelsPane extends React.PureComponent<
                                 renderItem={this.renderItem}
                                 ListFooterComponent={<Spacer height={100} />}
                                 onRefresh={() => {
-                                    this.props.NodeInfoStore?.getNodeInfo();
+                                    void this.props.NodeInfoStore?.getNodeInfo().catch(
+                                        () => {}
+                                    );
                                     getChannels();
                                 }}
                                 refreshing={loading}
