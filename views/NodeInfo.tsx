@@ -68,7 +68,7 @@ export default class NodeInfo extends React.Component<
 
     componentDidMount() {
         const { NodeInfoStore } = this.props;
-        NodeInfoStore.getNodeInfo();
+        void NodeInfoStore.getNodeInfo().catch(() => {});
         if (BackendUtils.supportsNetworkInfo()) {
             NodeInfoStore.getNetworkInfo();
         }
@@ -300,7 +300,9 @@ export default class NodeInfo extends React.Component<
                         <RefreshControl
                             refreshing={loading}
                             onRefresh={() => {
-                                NodeInfoStore.getNodeInfo();
+                                void NodeInfoStore.getNodeInfo().catch(
+                                    () => {}
+                                );
                                 if (showNetworkInfo) {
                                     NodeInfoStore.getNetworkInfo();
                                 }

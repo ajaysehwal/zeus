@@ -1012,17 +1012,22 @@ export default class Wallet extends React.Component<WalletProps, WalletState> {
                 NodeInfoStore.getNetworkInfo();
                 await UTXOsStore.listAccounts();
                 await BalanceStore.getCombinedBalance(false);
-                ChannelsStore.getChannelsWithPolling().then(() => {
-                    // Check for sweep to self-custody threshold after channels are online
-                    if (settings?.ecash?.enableCashu) {
-                        CashuStore.checkAndSweepMints();
-                        // Check Cashu balance for upgrade prompts after channels are loaded
-                        CashuStore.checkAndShowUpgradeModal(
-                            0,
-                            CashuStore.totalBalanceSats || 0
+                void ChannelsStore.getChannelsWithPolling()
+                    .then(() => {
+                        if (settings?.ecash?.enableCashu) {
+                            CashuStore.checkAndSweepMints();
+                            CashuStore.checkAndShowUpgradeModal(
+                                0,
+                                CashuStore.totalBalanceSats || 0
+                            );
+                        }
+                    })
+                    .catch((e) => {
+                        console.warn(
+                            'getChannelsWithPolling:',
+                            e?.message ?? e
                         );
-                    }
-                });
+                    });
 
                 if (rescan) {
                     await updateSettings({
@@ -1154,16 +1159,22 @@ export default class Wallet extends React.Component<WalletProps, WalletState> {
                 console.log('[LDK startup] fetching balance');
                 await BalanceStore.getCombinedBalance();
                 console.log('[LDK startup] polling channels');
-                ChannelsStore.getChannelsWithPolling().then(() => {
-                    // Check for sweep to self-custody threshold after channels are online
-                    if (settings?.ecash?.enableCashu) {
-                        CashuStore.checkAndSweepMints();
-                        CashuStore.checkAndShowUpgradeModal(
-                            0,
-                            CashuStore.totalBalanceSats || 0
+                void ChannelsStore.getChannelsWithPolling()
+                    .then(() => {
+                        if (settings?.ecash?.enableCashu) {
+                            CashuStore.checkAndSweepMints();
+                            CashuStore.checkAndShowUpgradeModal(
+                                0,
+                                CashuStore.totalBalanceSats || 0
+                            );
+                        }
+                    })
+                    .catch((e) => {
+                        console.warn(
+                            'getChannelsWithPolling:',
+                            e?.message ?? e
                         );
-                    }
-                });
+                    });
 
                 if (recovery) {
                     await updateSettings({
