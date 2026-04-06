@@ -902,7 +902,7 @@ export default class Wallet extends React.Component<WalletProps, WalletState> {
 
                         await waitForRpcReady();
                         if (!SyncStore.isSyncing) {
-                            SyncStore.startSyncing();
+                            void SyncStore.startSyncing().catch(() => {});
                         }
                     } catch (error: any) {
                         console.error(

@@ -72,6 +72,12 @@ describe('LndMobileErrors classification', () => {
                 'walletkit service not yet ready to accept calls'
             )
         ).toBe(LndErrorCode.RPC_NOT_READY);
+        expect(
+            matchesLndErrorCode(
+                'rpc error: code = Unknown desc = the RPC server is in the process of starting up, but not yet ready to accept calls',
+                LndErrorCode.RPC_NOT_READY
+            )
+        ).toBe(true);
     });
 
     it('maps LND already-running variants correctly', () => {

@@ -4,6 +4,7 @@ import ReactNativeBlobUtil from 'react-native-blob-util';
 
 import BackendUtils from '../utils/BackendUtils';
 import { LndMobileToolsEventEmitter } from '../utils/EventListenerUtils';
+import { LndErrorCode, matchesLndErrorCode } from '../utils/LndMobileErrors';
 import { sleep } from '../utils/SleepUtils';
 
 import NodeInfo from '../models/NodeInfo';
@@ -46,7 +47,9 @@ export default class SyncStore {
                 !this.isSyncing &&
                 this.settingsStore.implementation === 'embedded-lnd'
             ) {
-                this.startSyncing();
+                void this.startSyncing().catch(() => {
+                    // LND may still be starting after reconnect / wallet switch
+                });
             }
         });
     }
@@ -99,6 +102,10 @@ export default class SyncStore {
 
         return;
     };
+
+    private static isRpcStartingError(msg: string): boolean {
+        return matchesLndErrorCode(msg, LndErrorCode.RPC_NOT_READY);
+    }
 
     private getNodeInfo = () =>
         BackendUtils.getMyNodeInfo().then(
@@ -166,19 +173,59 @@ export default class SyncStore {
         // initial fetch
         while (!this.nodeInfo?.block_height) {
             if (!this.isSyncing) return;
-            await this.getNodeInfo();
+            try {
+                await this.getNodeInfo();
+            } catch (e: unknown) {
+                const msg = e instanceof Error ? e.message : String(e ?? '');
+                if (
+                    matchesLndErrorCode(msg, LndErrorCode.RPC_CONNECTION_CLOSED)
+                ) {
+                    runInAction(() => {
+                        this.isSyncing = false;
+                    });
+                    return;
+                }
+                if (SyncStore.isRpcStartingError(msg)) {
+                    await sleep(500);
+                    continue;
+                }
+                await sleep(3000);
+                continue;
+            }
             if (!this.nodeInfo?.block_height) {
                 await sleep(3000);
             }
         }
 
-        await this.setSyncInfo();
+        try {
+            await this.setSyncInfo();
+        } catch {
+            // mempool-only; guard in case setSyncInfo grows async throws
+        }
 
         let i = 0;
         while (this.numBlocksUntilSynced > 0) {
             if (!this.isSyncing) break; // Abort when reset() called (e.g. LND stopped for wallet creation)
             await sleep(2000);
-            this.getNodeInfo().then(() => this.setSyncInfo());
+            this.getNodeInfo()
+                .then(() => this.setSyncInfo())
+                .catch((e: unknown) => {
+                    const msg =
+                        e instanceof Error ? e.message : String(e ?? '');
+                    if (SyncStore.isRpcStartingError(msg)) {
+                        return;
+                    }
+                    if (
+                        matchesLndErrorCode(
+                            msg,
+                            LndErrorCode.RPC_CONNECTION_CLOSED
+                        )
+                    ) {
+                        runInAction(() => {
+                            this.isSyncing = false;
+                        });
+                    }
+                });
 
             // only query Mempool instance every 30 seconds
             const queryMempool = i === 14;
@@ -195,11 +242,13 @@ export default class SyncStore {
     };
 
     public checkRecoveryStatus = () => {
-        BackendUtils.getRecoveryInfo().then((data: any) => {
-            if (data.recovery_mode && !data.recovery_finished) {
-                this.startRecovering();
-            }
-        });
+        BackendUtils.getRecoveryInfo()
+            .then((data: any) => {
+                if (data.recovery_mode && !data.recovery_finished) {
+                    void this.startRecovering().catch(() => {});
+                }
+            })
+            .catch(() => {});
     };
 
     private getRecoveryStatus = async () => {
@@ -227,7 +276,23 @@ export default class SyncStore {
 
         while (this.isRecovering) {
             await sleep(2000);
-            await this.getRecoveryStatus();
+            try {
+                await this.getRecoveryStatus();
+            } catch (e: unknown) {
+                const msg = e instanceof Error ? e.message : String(e ?? '');
+                if (
+                    matchesLndErrorCode(msg, LndErrorCode.RPC_CONNECTION_CLOSED)
+                ) {
+                    runInAction(() => {
+                        this.isRecovering = false;
+                        this.recoveryProgress = null;
+                    });
+                    return;
+                }
+                if (SyncStore.isRpcStartingError(msg)) {
+                    continue;
+                }
+            }
         }
     };
 
