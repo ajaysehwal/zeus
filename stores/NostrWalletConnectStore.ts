@@ -6,8 +6,10 @@ if (typeof global !== 'undefined' && !global.TextDecoder) {
 }
 import 'websocket-polyfill';
 import { action, computed, observable, runInAction } from 'mobx';
-import { nwc } from '@getalby/sdk';
-import type {
+
+import {
+    NWCWalletService,
+    NWCWalletServiceKeyPair,
     Nip47GetInfoResponse,
     Nip47GetBalanceResponse,
     Nip47PayInvoiceRequest,
@@ -19,13 +21,10 @@ import type {
     Nip47Transaction,
     Nip47SignMessageResponse,
     Nip47SignMessageRequest,
-    Nip47SingleMethod
-} from '@getalby/sdk/dist/nwc/types';
-
-import type {
+    Nip47SingleMethod,
     NWCWalletServiceRequestHandler,
     NWCWalletServiceResponsePromise
-} from '@getalby/sdk/dist/nwc';
+} from '@getalby/sdk';
 
 import {
     getPublicKey,
@@ -187,7 +186,7 @@ export default class NostrWalletConnectStore {
     @observable public errorMessage = '';
     @observable public loadingMsg?: string;
     @observable public connections: NWCConnection[] = [];
-    @observable private nwcWalletServices: Map<string, nwc.NWCWalletService> =
+    @observable private nwcWalletServices: Map<string, NWCWalletService> =
         new Map();
     @observable private activeSubscriptions: Map<string, () => void> =
         new Map();
@@ -332,7 +331,7 @@ export default class NostrWalletConnectStore {
             try {
                 this.nwcWalletServices.set(
                     relayUrl,
-                    new nwc.NWCWalletService({
+                    new NWCWalletService({
                         relayUrl
                     })
                 );
@@ -557,7 +556,7 @@ export default class NostrWalletConnectStore {
             if (!this.nwcWalletServices.has(params.relayUrl)) {
                 this.nwcWalletServices.set(
                     params.relayUrl,
-                    new nwc.NWCWalletService({
+                    new NWCWalletService({
                         relayUrl: params.relayUrl
                     })
                 );
@@ -1178,7 +1177,7 @@ export default class NostrWalletConnectStore {
                     )
                 );
             }
-            const keypair = new nwc.NWCWalletServiceKeyPair(
+            const keypair = new NWCWalletServiceKeyPair(
                 serviceSecretKey,
                 connection.pubkey
             );

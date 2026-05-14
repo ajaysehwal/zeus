@@ -24,6 +24,7 @@ import NostrWalletConnectStore from '../../../stores/NostrWalletConnectStore';
 import { themeColor } from '../../../utils/ThemeUtils';
 import { localeString } from '../../../utils/LocaleUtils';
 import DateTimeUtils from '../../../utils/DateTimeUtils';
+import BackendUtils from '../../../utils/BackendUtils';
 
 import NWCConnection, {
     ConnectionWarningType
@@ -473,26 +474,25 @@ export default class NWCConnectionsList extends React.Component<
                                     </TouchableOpacity>
                                 )}
 
-                                {!(
-                                    Platform.OS === 'ios' &&
-                                    (SettingsStore.implementation !==
-                                        'embedded-lnd' ||
-                                        !SettingsStore.settings?.ecash
-                                            ?.enableCashu)
-                                ) && (
+                                {(Platform.OS === 'android' ||
+                                    (BackendUtils.supportsCashuWallet() &&
+                                        !!SettingsStore.settings?.ecash
+                                            ?.enableCashu)) && (
                                     <TouchableOpacity
                                         onPress={() =>
                                             navigation.navigate('NWCSettings')
                                         }
                                         accessibilityLabel={localeString(
-                                            'views.Settings.title'
+                                            'views.Settings.NostrWalletConnect.nwcSettings'
                                         )}
                                     >
                                         <Gear
                                             fill={themeColor('text')}
                                             width={HeaderIconSize}
                                             height={HeaderIconSize}
-                                            style={{ alignSelf: 'center' }}
+                                            style={{
+                                                alignSelf: 'center'
+                                            }}
                                         />
                                     </TouchableOpacity>
                                 )}
